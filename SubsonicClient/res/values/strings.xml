@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">SubsonicClient</string>
+    
+    <!-- options menu -->
+    <string name="select_media_folder">Select Media Folder</string>
+    
+	<!-- context menu -->    
+    <string name="download_original_file">Download Original File</string>
+    <string name="download_transcoded_file">Download Transcoded File</string>
+    <string name="stream_file">Stream File</string>
+
+    <!-- server browser fragment stuff -->
+    <string name="server_browser_no_data">No data here - set up your server in the preferences</string>
+    
+    <!-- buttons -->
+    <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
+    
+    <!-- preferences -->
+    <string name="preferences">Preferences</string>
+    
+    <!-- server preferences -->
+    <string name="server">Server</string>
+    <string name="server_pref_title">Server</string>
+    
+    <string name="server_url_pref_name">Server URL</string>
+    <string name="server_url_pref_title">Server URL</string>
+    <string name="server_url_pref_summary">The URL of your Subsonic server</string>
+    
+    <string name="username_pref_name">Username</string>
+    <string name="username_pref_title">Username</string>
+    <string name="username_pref_summary"></string>
+    
+    <string name="password_pref_name">Password</string>
+    <string name="password_pref_title">Password</string>
+    <string name="password_pref_summary"></string>
+    
+    <string name="test_connection">Test Connection</string>
+    <string name="test_connection_summary"></string>
+
+</resources>
