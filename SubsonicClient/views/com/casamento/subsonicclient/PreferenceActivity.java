@@ -20,7 +20,7 @@ public class PreferenceActivity extends SherlockPreferenceActivity implements On
     protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		
-    	addPreferencesFromResource(R.xml.preferences);
+    	addPreferencesFromResource(R.xml.server_prefs);
         
         Preference testConnection = this.findPreference("testConnection");
         testConnection.setOnPreferenceClickListener(new OnPreferenceClickListener() {

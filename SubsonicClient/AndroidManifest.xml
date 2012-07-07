@@ -23,10 +23,13 @@
             </intent-filter>
         </activity>
         
-        <activity
-            android:name=".PreferenceActivity"
-            android:label="@string/preferences">
-        </activity>
+        <activity android:name="SupportPreferenceActivity"
+        android:label="Settings"
+        android:enabled="true" >
+        <intent-filter>
+            <category android:name="android.intent.category.PREFERENCE" />
+        </intent-filter>
+    </activity>
     </application>
 
 </manifest>

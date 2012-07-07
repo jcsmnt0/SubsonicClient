@@ -6,6 +6,6 @@
         android:icon="@drawable/ic_action_database"
         android:title="@string/server_pref_title">
         <extra android:name="pref-resource"
-            android:value="prefs_server" />
+            android:value="server_prefs" />
     </header>
 </preference-headers>

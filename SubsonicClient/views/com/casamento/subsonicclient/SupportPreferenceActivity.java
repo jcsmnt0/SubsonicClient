@@ -19,7 +19,7 @@ import android.preference.PreferenceFragment;
 import android.text.InputType;
 import android.util.Log;
 
-// some code from http://stackoverflow.com/questions/10186697/preferenceactivity-android-4-0-and-earlier/11336098#11336098
+// some code from http://stackoverflow.com/questions/10186697/preferenceactivity-android-4-0-and-earlier/11336098#11336098 and http://www.blackmoonit.com/2012/07/all_api_prefsactivity/
 // should work the same across all API levels, unlike the built-in PreferenceActivity or PreferenceFragment
 public class SupportPreferenceActivity extends PreferenceActivity implements OnSharedPreferenceChangeListener {
 	private final static String logTag = "SupportPreferenceActivity";
@@ -53,7 +53,7 @@ public class SupportPreferenceActivity extends PreferenceActivity implements OnS
         }
         super.onCreate(aSavedState);
         if (!isNewV11Prefs()) {
-            addPreferencesFromResource(R.xml.preferences);
+            addPreferencesFromResource(R.xml.server_prefs);
             
             Preference testConnection = this.findPreference("testConnection");
             testConnection.setOnPreferenceClickListener(new OnPreferenceClickListener() {
