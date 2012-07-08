@@ -1,9 +1,7 @@
-.project
 .metadata
 bin/**
 tmp/**
 tmp/**/*
-*.iml
 *.tmp
 *.bak
 *.swp
@@ -47,3 +45,9 @@ local.properties
 .project
 
 proguard-project.txt
+
+# IntelliJ IDEA
+*.iml
+*.ipr
+*.iws
+.idea/
