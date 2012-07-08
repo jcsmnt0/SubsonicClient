@@ -1,5 +1,14 @@
 package com.casamento.subsonicclient;
 
+import android.app.ProgressDialog;
+import android.os.AsyncTask;
+import android.util.Log;
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.DefaultHttpClient;
+
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -7,22 +16,11 @@ import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.net.URLConnection;
 import java.net.URLEncoder;
 import java.util.Map;
 
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.DefaultHttpClient;
-
-import android.app.ProgressDialog;
-import android.os.AsyncTask;
-import android.util.Log;
-
 class RESTTask extends AsyncTask<Void, Integer, String> {
-	private final static String logTag = "SubsonicDownloader/RESTCaller";
+	private final static String logTag = "RESTTask";
 	private final String url;
 	private final String method;
 	private final OnRESTResponseListener callbackListener;
@@ -33,8 +31,7 @@ class RESTTask extends AsyncTask<Void, Integer, String> {
 	 * @param url				The URL of the REST service.
 	 * @param method			The REST method to call (can be null).
 	 * @param params			The parameters to pass to the REST method (can be null).
-	 * @param handler			The callback object.
-	 * @param dialog			The ProgressDialog to update (can be null).
+	 * @param callbackListener  The OnRESTResponseListener that will handle the callback.
 	 */
 	protected RESTTask(String url, String method, Map<String, String> params, OnRESTResponseListener callbackListener) {
 		this.url = url;
@@ -47,8 +44,8 @@ class RESTTask extends AsyncTask<Void, Integer, String> {
 	 * @param url				The URL of the REST service.
 	 * @param method			The REST method to call (can be null).
 	 * @param params			The parameters to pass to the REST method (can be null).
-	 * @param handler			The callback object.
 	 * @param dialog			The ProgressDialog to update (can be null).
+	 * @param callbackListener  The OnRESTResponseListener that will handle the callback.
 	 */
 	protected RESTTask(String url, String method, Map<String, String> params, ProgressDialog dialog, OnRESTResponseListener callbackListener) {
 		this(url, method, params, callbackListener);
@@ -58,10 +55,10 @@ class RESTTask extends AsyncTask<Void, Integer, String> {
 	/**
 	 * Returns the URL that calls a REST method with parameters.
 	 * 
-	 * @param url		The URL of the REST server.
+	 * @param restUrl	The URL of the REST server.
 	 * @param method	The REST method to call (can be null).
 	 * @param params	The parameters to pass (can be null).
-	 * @return
+	 * @return          The URL of the REST method call.
 	 * @throws MalformedURLException 
 	 * @throws UnsupportedEncodingException 
 	 */

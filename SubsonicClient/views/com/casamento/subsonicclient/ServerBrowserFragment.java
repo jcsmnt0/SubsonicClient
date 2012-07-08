@@ -1,40 +1,34 @@
 package com.casamento.subsonicclient;
 
+import android.app.AlertDialog;
+import android.content.ActivityNotFoundException;
+import android.content.DialogInterface;
+import android.content.DialogInterface.OnClickListener;
+import android.content.SharedPreferences;
+import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
+import android.os.Bundle;
+import android.preference.PreferenceManager;
+import android.util.Log;
+import android.view.ContextMenu;
+import android.view.ContextMenu.ContextMenuInfo;
+import android.view.View;
+import android.widget.AdapterView;
+import android.widget.AdapterView.AdapterContextMenuInfo;
+import android.widget.AdapterView.OnItemClickListener;
+import android.widget.ListView;
+import com.actionbarsherlock.app.SherlockListFragment;
+import com.actionbarsherlock.view.Menu;
+import com.actionbarsherlock.view.MenuItem;
+
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Stack;
 
-import com.actionbarsherlock.app.SherlockListFragment;
-import com.actionbarsherlock.app.SherlockFragmentActivity;
-import com.actionbarsherlock.view.Menu;
-import com.actionbarsherlock.view.MenuItem;
-
-import android.widget.AdapterView;
-import android.widget.ListView;
-import android.widget.AdapterView.AdapterContextMenuInfo;
-import android.widget.AdapterView.OnItemClickListener;
-import android.util.Log;
-import android.view.ContextMenu;
-import android.view.LayoutInflater;
-import android.view.View;
-import android.view.ContextMenu.ContextMenuInfo;
-import android.view.ViewGroup;
-import android.app.AlertDialog;
-import android.content.ActivityNotFoundException;
-import android.content.Context;
-import android.content.DialogInterface;
-import android.content.DialogInterface.OnClickListener;
-import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
-import android.content.SharedPreferences;
-import android.os.Bundle;
-import android.preference.PreferenceManager;
-
 public class ServerBrowserFragment extends SherlockListFragment implements OnSharedPreferenceChangeListener {
 	private final String logTag = "ServerBrowserFragment";
 	private final ServerBrowserFragment self = this; // for referencing within anonymous classes
-	private SherlockFragmentActivity activity;
 	private SharedPreferences prefs;
 	private List<MediaFolder> mediaFolders;
 	private MediaFolder currentMediaFolder;
@@ -49,7 +43,7 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
 	}
 	
     private void connectToServer() {
-    	this.caller = new SubsonicCaller(prefs.getString("serverUrl", null), prefs.getString("username", null), prefs.getString("password", null), SubsonicClientActivity.apiVersion, SubsonicClientActivity.clientId, this.activity);
+    	this.caller = new SubsonicCaller(prefs.getString("serverUrl", null), prefs.getString("username", null), prefs.getString("password", null), SubsonicClientActivity.apiVersion, SubsonicClientActivity.clientId, this.getSherlockActivity());
 		this.caller.getMediaFolders(new OnMediaFoldersResponseListener() {
 			@Override
 			void onMediaFoldersResponse(List<MediaFolder> mediaFolders) {
@@ -63,7 +57,7 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
 					self.setEmptyText("Set up your server in the preferences");
 					throw e;
 				} catch (Exception e1) {
-					Util.showSingleButtonAlertBox(self.activity, e1.getLocalizedMessage(), "OK");
+					Util.showSingleButtonAlertBox(self.getSherlockActivity(), e1.getLocalizedMessage(), "OK");
 				}
 			}
 		});
@@ -81,13 +75,12 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
 	public void onActivityCreated(Bundle savedInstanceState) {
 		super.onActivityCreated(savedInstanceState);
 		
-		this.activity = this.getSherlockActivity();
 		this.setHasOptionsMenu(true);
-		this.prefs = PreferenceManager.getDefaultSharedPreferences(this.activity);
+		this.prefs = PreferenceManager.getDefaultSharedPreferences(this.getSherlockActivity());
 		this.prefs.registerOnSharedPreferenceChangeListener(this);
 		
 		if (prefs.getString("serverUrl", null) == null || prefs.getString("username", null) == null || prefs.getString("password", null) == null) {
-			Util.showSingleButtonAlertBox(this.activity, "The server is not fully set up.", "You're right");
+			Util.showSingleButtonAlertBox(this.getSherlockActivity(), "The server is not fully set up.", "You're right");
 		} else {
 			connectToServer();
 		}
@@ -97,7 +90,7 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
 		this.currentMediaFolder.initContents();
 		this.savedScrollPositions = new Stack<Integer>();
 		
-		this.setListAdapter(new FilesystemEntryArrayAdapter(this.activity, this.currentMediaFolder.contents));
+		this.setListAdapter(new FilesystemEntryArrayAdapter(this.getSherlockActivity(), this.currentMediaFolder.contents));
 		
 		this.listView = this.getListView();
 		this.registerForContextMenu(this.getListView());
@@ -116,7 +109,7 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
     		// show folder menu
     	} else {
     		MediaFile mediaFile = (MediaFile)item;
-    		this.activity.getMenuInflater().inflate(R.menu.context_menu_file, menu);
+    		this.getSherlockActivity().getMenuInflater().inflate(R.menu.context_menu_file, menu);
     		menu.findItem(R.id.fileContextMenu_downloadOriginalFile).setTitle("Download Original File (" + mediaFile.suffix + ")");
     		menu.findItem(R.id.fileContextMenu_downloadTranscodedFile).setTitle("Download Transcoded File (" + (mediaFile.transcodedSuffix != null ? mediaFile.transcodedSuffix : mediaFile.suffix) + ")");
     	}
@@ -137,7 +130,7 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
     				try {
 						caller.downloadOriginal(mediaFile);
 					} catch (MalformedURLException e) {
-						Util.showSingleButtonAlertBox(this.activity, "URL incorrect or something", "Forgive me");
+						Util.showSingleButtonAlertBox(this.getSherlockActivity(), "URL incorrect or something", "Forgive me");
 						e.printStackTrace();
 					} catch (UnsupportedEncodingException e) {
 						Log.wtf(logTag, e);
@@ -148,7 +141,7 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
     				try {
     					caller.downloadTranscoded(mediaFile, 0, null, 0, null, false);
     				} catch (MalformedURLException e) {
-						Util.showSingleButtonAlertBox(this.activity, "URL incorrect or something", "Forgive me");
+						Util.showSingleButtonAlertBox(this.getSherlockActivity(), "URL incorrect or something", "Forgive me");
 						e.printStackTrace();
 					} catch (UnsupportedEncodingException e) {
 						Log.wtf(logTag, e);
@@ -159,10 +152,10 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
 					try {
 						caller.stream(mediaFile, 0, null, 0, null, false);
 					} catch (MalformedURLException e) {
-						Util.showSingleButtonAlertBox(this.activity, "URL incorrect or something", "Sure");
+						Util.showSingleButtonAlertBox(this.getSherlockActivity(), "URL incorrect or something", "Sure");
 						e.printStackTrace();
 					} catch (ActivityNotFoundException e) {
-						Util.showSingleButtonAlertBox(this.activity, "You don't have an app to handle files of type " + mediaFile.contentType, "You're right");
+						Util.showSingleButtonAlertBox(this.getSherlockActivity(), "You don't have an app to handle files of type " + mediaFile.contentType, "You're right");
 						e.printStackTrace();
 					} catch (UnsupportedEncodingException e) {
 						Log.wtf(logTag, e);
@@ -178,7 +171,7 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
     public void onPrepareOptionsMenu(final Menu menu) {
     	// TODO: if this check isn't here the menu items get added every time the menu is shown, find out why and figure out how to hide items programmatically
     	if (menu.findItem(R.id.option_selectMediaFolder) == null) {
-    		this.activity.getSupportMenuInflater().inflate(R.menu.optionsmenu_server_browser, menu);
+    		this.getSherlockActivity().getSupportMenuInflater().inflate(R.menu.optionsmenu_server_browser, menu);
     	}
     }
     
@@ -208,11 +201,11 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
     
     private void showSelectMediaFolderDialog() {
     	if (this.mediaFolders == null || this.mediaFolders.size() == 0) {
-    		Util.showSingleButtonAlertBox(this.activity, "There's nothing here!", "I see.");
+    		Util.showSingleButtonAlertBox(this.getSherlockActivity(), "There's nothing here!", "I see.");
     		return;
     	}
     	
-    	AlertDialog.Builder dialog = new AlertDialog.Builder(this.activity);
+    	AlertDialog.Builder dialog = new AlertDialog.Builder(this.getSherlockActivity());
     	dialog.setTitle("Select media folder:");
     	
     	// populate list of media folders
@@ -248,7 +241,7 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
     	this.currentMediaFolder = mediaFolder;
     	this.currentFolder = null;
 
-		this.activity.getSupportActionBar().setDisplayHomeAsUpEnabled(false);
+		this.getSherlockActivity().getSupportActionBar().setDisplayHomeAsUpEnabled(false);
     	
     	if (this.currentMediaFolder == null || this.currentMediaFolder.contents == null) {
     		this.caller.listMediaFolderContents(this.currentMediaFolder, null, new OnMediaFolderContentsResponseListener() {
@@ -258,7 +251,7 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
 						self.currentMediaFolder = new MediaFolder("Everything");
 					self.currentMediaFolder.contents = contents;
 					self.showFolderContents(self.currentMediaFolder);
-					self.activity.setTitle(self.currentMediaFolder.name);
+					self.getSherlockActivity().setTitle(self.currentMediaFolder.name);
 				}
 				
 				@Override
@@ -266,13 +259,13 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
 					try {
 						throw e;
 					} catch (Exception e1) {
-						Util.showSingleButtonAlertBox(self.activity, e1.getLocalizedMessage(), "I forgive you");
+						Util.showSingleButtonAlertBox(self.getSherlockActivity(), e1.getLocalizedMessage(), "I forgive you");
 					}
 				}
     		});
     	} else {
     		this.showFolderContents(this.currentMediaFolder);
-    		this.activity.setTitle(mediaFolder.name);
+    		this.getSherlockActivity().setTitle(mediaFolder.name);
     	}
     }
     
@@ -285,8 +278,8 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
     			public void onFolderContentsResponse(java.util.List<FilesystemEntry> contents) {
     				self.currentFolder.contents = contents;
     				self.showFolderContents(self.currentFolder);
-    				self.activity.setTitle(self.currentFolder.name);
-    				self.activity.getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+    				self.getSherlockActivity().setTitle(self.currentFolder.name);
+    				self.getSherlockActivity().getSupportActionBar().setDisplayHomeAsUpEnabled(true);
     			}
     			
     			@Override
@@ -294,38 +287,37 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
     				try {
 						throw e;
 					} catch (Exception e1) {
-						Util.showSingleButtonAlertBox(self.activity, e1.getLocalizedMessage(), "I forgive you");
+						Util.showSingleButtonAlertBox(self.getSherlockActivity(), e1.getLocalizedMessage(), "I forgive you");
 					}
     			}
     		});
     	} else {
     		this.showFolderContents(this.currentFolder);
-    		this.activity.setTitle(folder.name);
-    		this.activity.getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+    		this.getSherlockActivity().setTitle(folder.name);
+    		this.getSherlockActivity().getSupportActionBar().setDisplayHomeAsUpEnabled(true);
     	}
     }
     
     private void showFolderContents(final Folder folder) {
-    	this.setListAdapter(new FilesystemEntryArrayAdapter(this.activity, folder.contents));
-    	final ServerBrowserFragment thisFragment = this;
-    	
+    	this.setListAdapter(new FilesystemEntryArrayAdapter(this.getSherlockActivity(), folder.contents));
+
     	this.listView.setOnItemClickListener(new OnItemClickListener() {
     		public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
     			
     			FilesystemEntry clickedEntry = folder.contents.get(position);
     			
     			if (clickedEntry.isFolder) {
-    				thisFragment.savedScrollPositions.push(thisFragment.listView.getFirstVisiblePosition());
+				    self.savedScrollPositions.push(self.listView.getFirstVisiblePosition());
     				Folder clickedFolder = (Folder)clickedEntry;
-    				thisFragment.setCurrentFolder(clickedFolder);
+				    self.setCurrentFolder(clickedFolder);
     			} else {
     				try {
-    					thisFragment.caller.stream((MediaFile)clickedEntry, 0, null, 0, null, true);
+					    self.caller.stream((MediaFile)clickedEntry, 0, null, 0, null, true);
 					} catch (MalformedURLException e) {
-						Util.showSingleButtonAlertBox(thisFragment.activity, "The URL was bad in some way.", "Acceptance");
+						Util.showSingleButtonAlertBox(self.getSherlockActivity(), "The URL was bad in some way.", "Acceptance");
 						e.printStackTrace();
 					} catch (ActivityNotFoundException e) {
-						Util.showSingleButtonAlertBox(thisFragment.activity, "You don't have an app to handle files of type " + ((MediaFile)clickedEntry).contentType, "You're right");
+						Util.showSingleButtonAlertBox(self.getSherlockActivity(), "You don't have an app to handle files of type " + ((MediaFile)clickedEntry).contentType, "You're right");
 					} catch (UnsupportedEncodingException e) {
 						// TODO Auto-generated catch block
 						e.printStackTrace();
@@ -345,7 +337,7 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
 	public void onListFolderContentsResponse(final List<FilesystemEntry> contents) {
 		this.currentFolder.contents = contents;
 		this.showFolderContents(this.currentFolder);
-		this.activity.setTitle(this.currentFolder.name);
+		this.getSherlockActivity().setTitle(this.currentFolder.name);
 	}
 }
 	

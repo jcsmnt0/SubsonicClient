@@ -13,6 +13,9 @@
 
     <!-- server browser fragment stuff -->
     <string name="server_browser_no_data">No data here - set up your server in the preferences</string>
+
+	<!-- download manager fragment stuff -->
+	<string name="download_manager_no_downloads">No downloads</string>
     
     <!-- buttons -->
     <string name="ok">OK</string>

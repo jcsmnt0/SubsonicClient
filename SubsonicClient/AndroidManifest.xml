@@ -15,7 +15,7 @@
         <activity
             android:name=".SubsonicClientActivity"
             android:label="@string/app_name" 
-            android:configChanges="orientation" >
+            android:configChanges="orientation|keyboardHidden|screenSize" >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -24,12 +24,14 @@
         </activity>
         
         <activity android:name="SupportPreferenceActivity"
-        android:label="Settings"
-        android:enabled="true" >
-        <intent-filter>
-            <category android:name="android.intent.category.PREFERENCE" />
-        </intent-filter>
-    </activity>
-    </application>
+	        android:label="Settings"
+	        android:enabled="true"
+	        android:configChanges="orientation|keyboardHidden|screenSize" >
+	        <intent-filter>
+	            <category android:name="android.intent.category.PREFERENCE" />
+	        </intent-filter>
+		</activity>
+
+	</application>
 
 </manifest>

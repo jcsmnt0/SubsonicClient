@@ -1,15 +1,9 @@
 package com.casamento.subsonicclient;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.util.Arrays;
-import java.util.List;
-
-
-
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
+import android.content.res.Configuration;
 import android.os.Bundle;
 import android.preference.EditTextPreference;
 import android.preference.Preference;
@@ -17,7 +11,11 @@ import android.preference.Preference.OnPreferenceClickListener;
 import android.preference.PreferenceActivity;
 import android.preference.PreferenceFragment;
 import android.text.InputType;
-import android.util.Log;
+
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.List;
 
 // some code from http://stackoverflow.com/questions/10186697/preferenceactivity-android-4-0-and-earlier/11336098#11336098 and http://www.blackmoonit.com/2012/07/all_api_prefsactivity/
 // should work the same across all API levels, unlike the built-in PreferenceActivity or PreferenceFragment
@@ -25,6 +23,13 @@ public class SupportPreferenceActivity extends PreferenceActivity implements OnS
 	private final static String logTag = "SupportPreferenceActivity";
 	protected Method mLoadHeaders = null;
 	protected Method mHasHeaders = null;
+
+	// don't restart activity on device rotation!
+	@Override
+	public void onConfigurationChanged(Configuration newConfig) {
+		//ignore orientation change
+		super.onConfigurationChanged(newConfig);
+	}
 	
 	/**
      * Checks to see if using new v11+ way of handling PrefFragments.

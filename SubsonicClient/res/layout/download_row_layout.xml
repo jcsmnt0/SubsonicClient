@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="fill_parent"
+              android:layout_height="fill_parent">
+
+	<TextView
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:text="title"
+			android:id="@+id/listrow_download_title" android:layout_alignParentLeft="true" android:layout_alignParentTop="true"/>
+	<TextView
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:text="Path"
+			android:id="@+id/listrow_download_path" android:layout_alignParentLeft="true" android:layout_below="@+id/listrow_download_title"/>
+	<ProgressBar
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:id="@+id/listrow_download_progress"
+			style="@style/Widget.Sherlock.ProgressBar.Horizontal"
+			android:max="100"
+			android:layout_alignLeft="@+id/listrow_download_title" android:layout_below="@+id/listrow_download_path"
+			android:layout_alignParentRight="true"/>
+</RelativeLayout>

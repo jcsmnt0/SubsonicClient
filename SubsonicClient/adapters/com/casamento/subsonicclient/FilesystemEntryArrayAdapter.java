@@ -1,27 +1,26 @@
 package com.casamento.subsonicclient;
 
-import java.util.List;
-
 import android.content.Context;
 import android.graphics.drawable.Drawable;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.TextView;
 
-public class FilesystemEntryArrayAdapter extends ArrayAdapter<FilesystemEntry> {
+import java.util.List;
+
+class FilesystemEntryArrayAdapter extends ArrayAdapter<FilesystemEntry> {
 	private final String logTag = "FilesystemEntryArrayAdapter";
 	private final Context context;
 	private final List<FilesystemEntry> entries;
-	private LayoutInflater inflater;
+	private final LayoutInflater inflater;
 	
 	private static final class ViewHolder {
 		TextView label;
 	}
 	
-	public FilesystemEntryArrayAdapter(Context context, List<FilesystemEntry> entries) {
+	protected FilesystemEntryArrayAdapter(Context context, List<FilesystemEntry> entries) {
 		super(context, R.layout.music_folder_row_layout, entries);
 		this.context = context;
 		this.entries = entries;

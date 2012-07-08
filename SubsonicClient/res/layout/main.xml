@@ -3,17 +3,9 @@
     android:layout_width="fill_parent"
     android:layout_height="fill_parent"
     android:orientation="vertical" >
-
-    <!--ListView
-        android:id="@+id/folderView"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content" >
-    </ListView-->
-    
-    <fragment 
-        android:id="@+id/frag"
-        android:layout_width="fill_parent"
-        android:layout_height="fill_parent"
-        class="com.casamento.subsonicclient.ServerBrowserFragment"/>
-
+    <LinearLayout
+            android:id="@+id/fragment_container"
+            android:layout_height="match_parent"
+            android:layout_width="match_parent">
+    </LinearLayout>
 </LinearLayout>
