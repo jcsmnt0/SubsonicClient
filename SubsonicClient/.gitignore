@@ -1,9 +1,9 @@
-*.pydevproject
 .project
 .metadata
 bin/**
 tmp/**
 tmp/**/*
+*.iml
 *.tmp
 *.bak
 *.swp
@@ -45,3 +45,5 @@ local.properties
 # Eclipse project files
 .classpath
 .project
+
+proguard-project.txt
