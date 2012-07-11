@@ -96,6 +96,8 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
 		
 		this.listView = this.getListView();
 		this.registerForContextMenu(this.getListView());
+		this.listView.setFastScrollEnabled(true);
+
 	}
 	
 	@Override

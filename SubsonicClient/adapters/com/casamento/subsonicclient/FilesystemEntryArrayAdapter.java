@@ -10,6 +10,7 @@ import android.widget.TextView;
 
 import java.util.List;
 
+// TODO: use xml for layout
 class FilesystemEntryArrayAdapter extends ArrayAdapter<FilesystemEntry> {
 	private final String logTag = "FilesystemEntryArrayAdapter";
 	private final Context context;
