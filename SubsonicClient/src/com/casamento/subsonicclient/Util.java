@@ -1,18 +1,17 @@
 package com.casamento.subsonicclient;
 
-import java.io.IOException;
-import java.net.URL;
+import android.app.AlertDialog;
+import android.app.ProgressDialog;
+import android.content.Context;
+import android.text.Html;
+
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
 
-import android.app.AlertDialog;
-import android.app.ProgressDialog;
-import android.content.Context;
-import android.text.Html;
-
+// convenience methods and such
 public final class Util {
 	public static Calendar getDateFromString(final String dateStr) throws ParseException {
 		if (dateStr == null)
@@ -32,7 +31,8 @@ public final class Util {
 		alertBox.setNeutralButton(buttonText, null);
 		alertBox.show();
 	}
-	
+
+	// TODO: read Content-Length header of JSON and use ActionBar progress bar instead of this
 	public static ProgressDialog createIndeterminateProgressDialog(final Context context, final String message) {
 		ProgressDialog dialog = new ProgressDialog(context);
 		dialog.setIndeterminate(true);
@@ -40,21 +40,8 @@ public final class Util {
 		return dialog;
 	}
 	
-	public static ProgressDialog createPercentProgressDialog(final Context context, final String message) {
-		ProgressDialog dialog = new ProgressDialog(context);
-		dialog.setMessage(message);
-		dialog.setIndeterminate(false);
-		dialog.setMax(100);
-		dialog.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
-		return dialog;
-	}
-	
-	public static String getURLContentType(final URL url) throws IOException {
-		return url.openConnection().getContentType();
-	}
-	
 	public static String fixHTML(final String toFix) {
 		if (toFix == null) return null;
-		return Html.fromHtml((String)toFix).toString();
+		return Html.fromHtml(toFix).toString();
 	}
 }

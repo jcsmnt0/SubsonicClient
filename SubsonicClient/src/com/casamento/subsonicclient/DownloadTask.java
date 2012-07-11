@@ -1,8 +1,8 @@
 package com.casamento.subsonicclient;
 
-import android.app.ProgressDialog;
 import android.os.AsyncTask;
-import android.util.Log;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
@@ -15,38 +15,41 @@ import java.net.URL;
 
 class DownloadTask extends AsyncTask<Void, Long, String> {
 	private final String logTag = "DownloadTask";
-	private URL url;
-	private String saveLocation;
-	private ProgressDialog progressDialog;
-	private boolean indeterminate;
-	private String dialogMessage;
-	
-	protected DownloadTask(URL url, String saveLocation, ProgressDialog progressDialog) {
+	private TextView progressView;
+	private ProgressBar progressBar;
+	private long contentLength;
+	protected String name, savePath;
+	protected URL url;
+
+	protected DownloadTask(final URL url, final String name, final String savePath) {
 		this.url = url;
-		this.progressDialog = progressDialog;
-		this.saveLocation = saveLocation;
-		Log.d(logTag, url.toString());
-		Log.d(logTag, saveLocation);
+		this.name = name;
+		this.savePath = savePath;
+	}
+
+	protected void attachProgressView(TextView progressView) {
+		this.progressView = progressView;
 	}
 	
 	@Override
 	protected void onPreExecute() {
 		super.onPreExecute();
-		progressDialog.show();
 	}
 	
 	@Override
 	protected void onProgressUpdate(Long... progress) {
 		super.onProgressUpdate(progress);
-		
-		progressDialog.setProgress(progress[0].intValue());
+
+		if (this.progressView != null) {
+			this.progressView.setText(progress[0].toString() + "/" + Long.toString(this.contentLength) + " bytes");
+		}
 	}
 	
 	@Override
 	protected String doInBackground(Void... params) {
 		try {
 			HttpClient httpClient = new DefaultHttpClient();
-			HttpGet httpGet = null;
+			HttpGet httpGet;
 			
 			httpGet = new HttpGet(this.url.toURI());
 			HttpResponse response = httpClient.execute(httpGet);
@@ -54,33 +57,32 @@ class DownloadTask extends AsyncTask<Void, Long, String> {
 			
 			if (entity != null) {
 				InputStream input = new BufferedInputStream(entity.getContent());
-				File outDir = new File(this.saveLocation.substring(0, this.saveLocation.lastIndexOf("/")));
+				File outDir = new File(this.savePath.substring(0, this.savePath.lastIndexOf("/")));
 				outDir.mkdirs();
-				OutputStream output = new FileOutputStream(this.saveLocation);
-				
-				if (this.progressDialog != null) {
-					int contentLength = (int)entity.getContentLength();
-					if (contentLength > 0) {
-						this.progressDialog.setMax(contentLength);
-						this.progressDialog.setIndeterminate(this.indeterminate = false);
-					} else {
-						this.progressDialog.setIndeterminate(this.indeterminate = true);
-					}
-				}
+				OutputStream output = new FileOutputStream(this.savePath);
+
+				this.contentLength = entity.getContentLength();
+				boolean indeterminate = (contentLength <= 0);
+
+//				if (!indeterminate) {
+//					this.progressBar.setMax((int)contentLength);
+//					this.progressBar.setIndeterminate(false);
+//				} else {
+//					this.progressBar.setVisibility(View.GONE);
+//				}
 				
 				byte data[] = new byte[1024];
 				long total = 0;
 				int count;
 				while ((count = input.read(data)) != -1) {
 					total += count;
-					if (!this.indeterminate)
-						publishProgress(total);
+					if (!indeterminate)
+						this.publishProgress(total);
 					output.write(data, 0, count);
 				}
 				output.flush();
 				output.close();
 				input.close();
-				this.progressDialog.dismiss();
 			}
 		} catch (IOException e) {
 			e.printStackTrace();

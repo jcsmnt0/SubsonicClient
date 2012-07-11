@@ -1,21 +1,5 @@
 package com.casamento.subsonicclient;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.text.ParseException;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import android.app.ProgressDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
@@ -23,9 +7,19 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Environment;
 import android.util.Log;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
-public class SubsonicCaller {
-	static final class SubsonicMethods {
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.MalformedURLException;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.util.*;
+
+class SubsonicCaller {
+	private static final class SubsonicMethods {
 		// documentation is mostly taken from http://www.subsonic.org/pages/api.jsp
 		// "param: description" is a required parameter, "[param]: description" is optional
 		// example outputs can be found at <server>/xsd
@@ -233,7 +227,7 @@ public class SubsonicCaller {
 	}
 
 	private final String logTag = "SubsonicCaller";
-	private String url;
+	private String url; // TODO: use URIs, no conversion required for RESTTask
 	private Map<String, String> requiredParams;
 	private Context context;
 	protected SubsonicCaller(final String url, final String username, final String password, final String version, final String clientId, final Context context) {
@@ -494,9 +488,46 @@ public class SubsonicCaller {
 		this.context.startActivity(intent);
 	}
 
+//	/**
+//	 * Begins downloading a transcoded file from the server.
+//	 *
+//	 * @param mediaFile					The MediaFile to stream.
+//	 * @param maxBitRate				(1.2.0+) The maximum bit rate to transcode to; 0 for unlimited.
+//	 * @param format					(1.6.0+) The preferred transcoding format (e.g. "mp3", "flv") (can be null).
+//	 * @param timeOffset				The offset (in seconds) at which to start streaming a video file.
+//	 * @param videoSize					(1.6.0+) The size (in "WIDTHxHEIGHT" format) to request a video in (can be null).
+//	 * @param estimateContentLength		(1.8.0+) Whether to estimate the content size in the Content-Length HTTP header.
+//	 * @throws MalformedURLException	If the URL is somehow bad.
+//	 * @throws UnsupportedEncodingException
+//	 */
+//	protected void downloadTranscoded(MediaFile mediaFile, int maxBitRate, String format, int timeOffset, String videoSize, boolean estimateContentLength) throws MalformedURLException, UnsupportedEncodingException {
+//		Map<String, String> params = new HashMap<String, String>();
+//		params.putAll(requiredParams);
+//		params.put("id", Integer.toString(mediaFile.id));
+//
+//		ProgressDialog progressDialog = new ProgressDialog(this.context);
+//		progressDialog.setMessage("Downloading " + mediaFile.name);
+//
+//		if (maxBitRate > 0)
+//			params.put("maxBitRate", Integer.toString(maxBitRate));
+//		if (format != null)
+//			params.put("format", format);
+//		if (timeOffset > 0)
+//			params.put("timeOffset", Integer.toString(timeOffset));
+//		if (videoSize != null)
+//			params.put("videoSize", videoSize);
+//		if (estimateContentLength)
+//			params.put("estimateContentLength", "true");
+//
+//		URL downloadURL = RESTTask.buildRESTCallURL(this.url, SubsonicMethods.STREAM, params);
+//		String extStorageDir = Environment.getExternalStorageDirectory().toString() + "/SubsonicClient/";
+//		String filePath = extStorageDir + mediaFile.path.substring(0, mediaFile.path.lastIndexOf(".")+1) + (mediaFile.transcodedSuffix != null ? mediaFile.transcodedSuffix : mediaFile.suffix);
+//		new DownloadTask(downloadURL, filePath, progressDialog).execute();
+//	}
+
 	/**
-	 * Begins downloading a transcoded file from the server. 
-	 * 
+	 * Returns a Download object for a transcoded file.
+	 *
 	 * @param mediaFile					The MediaFile to stream.
 	 * @param maxBitRate				(1.2.0+) The maximum bit rate to transcode to; 0 for unlimited.
 	 * @param format					(1.6.0+) The preferred transcoding format (e.g. "mp3", "flv") (can be null).
@@ -504,51 +535,63 @@ public class SubsonicCaller {
 	 * @param videoSize					(1.6.0+) The size (in "WIDTHxHEIGHT" format) to request a video in (can be null).
 	 * @param estimateContentLength		(1.8.0+) Whether to estimate the content size in the Content-Length HTTP header.
 	 * @throws MalformedURLException	If the URL is somehow bad.
-	 * @throws UnsupportedEncodingException 
+	 * @throws UnsupportedEncodingException
 	 */
-	protected void downloadTranscoded(MediaFile mediaFile, int maxBitRate, String format, int timeOffset, String videoSize, boolean estimateContentLength) throws MalformedURLException, UnsupportedEncodingException {
-		Map<String, String> params = new HashMap<String, String>();
-		params.putAll(requiredParams);
-		params.put("id", Integer.toString(mediaFile.id));
-		
-		ProgressDialog progressDialog = new ProgressDialog(this.context);
-		progressDialog.setMessage("Downloading " + mediaFile.name);
-		
-		if (maxBitRate > 0)
-			params.put("maxBitRate", Integer.toString(maxBitRate));
-		if (format != null)
-			params.put("format", format);
-		if (timeOffset > 0)
-			params.put("timeOffset", Integer.toString(timeOffset));
-		if (videoSize != null)
-			params.put("videoSize", videoSize);
-		if (estimateContentLength)
-			params.put("estimateContentLength", "true");
-		
-		URL downloadURL = RESTTask.buildRESTCallURL(this.url, SubsonicMethods.STREAM, params);
+	protected DownloadTask getTranscodedDownloadTask(final MediaFile mediaFile, final int maxBitRate, final String format, final int timeOffset, final String videoSize, final boolean estimateContentLength) throws IOException, UnsupportedEncodingException, URISyntaxException {
+		URL downloadURL = RESTTask.buildRESTCallURL(this.url, SubsonicMethods.STREAM, new HashMap<String, String>() {{
+			this.putAll(requiredParams);
+			this.put("id", Integer.toString(mediaFile.id));
+			if (maxBitRate > 0)
+				this.put("maxBitRate", Integer.toString(maxBitRate));
+			if (timeOffset > 0)
+				this.put("timeOffset", Integer.toString(timeOffset));
+			if (videoSize != null)
+				this.put("videoSize", videoSize);
+			if (estimateContentLength)
+				this.put("estimateContentLength", "true");
+		}});
+
 		String extStorageDir = Environment.getExternalStorageDirectory().toString() + "/SubsonicClient/";
-		String filePath = extStorageDir + mediaFile.path.substring(0, mediaFile.path.lastIndexOf(".")+1) + (mediaFile.transcodedSuffix != null ? mediaFile.transcodedSuffix : mediaFile.suffix); 
-		new DownloadTask(downloadURL, filePath, progressDialog).execute();
+		String filePath = extStorageDir + mediaFile.path.substring(0, mediaFile.path.lastIndexOf('.')+1) + (mediaFile.transcodedSuffix != null ? mediaFile.transcodedSuffix : mediaFile.suffix);
+		return new DownloadTask(downloadURL, mediaFile.name, filePath);
+	}
+
+	/**
+	 * Returns a Download object for an original (non-transcoded) file.
+	 *
+	 * @param mediaFile	The MediaFile to download.
+	 * @throws MalformedURLException
+	 * @throws UnsupportedEncodingException
+	 */
+	protected DownloadTask getOriginalDownloadTask(final MediaFile mediaFile) throws IOException, UnsupportedEncodingException, URISyntaxException {
+		URL downloadURL = RESTTask.buildRESTCallURL(this.url, SubsonicMethods.DOWNLOAD, new HashMap<String, String>() {{
+			this.putAll(requiredParams);
+			this.put("id", Integer.toString(mediaFile.id));
+		}});
+
+		String filePath = Environment.getExternalStorageDirectory().toString() + "/SubsonicClient/" + mediaFile.path;
+		return new DownloadTask(downloadURL, mediaFile.name, filePath);
 	}
 	
-	/**
-	 * Begins downloading the original file from the server without transcoding.
-	 * 
-	 * @param mediaFile	The MediaFile to download.
-	 * @throws MalformedURLException 
-	 * @throws UnsupportedEncodingException 
-	 */
-	protected void downloadOriginal(MediaFile mediaFile) throws MalformedURLException, UnsupportedEncodingException {
-		Map<String, String> params = new HashMap<String, String>();
-		params.putAll(requiredParams);
-		params.put("id", Integer.toString(mediaFile.id));
-		
-		ProgressDialog progressDialog = Util.createPercentProgressDialog(this.context, "Downloading " + mediaFile.name);
-		
-		URL downloadURL = RESTTask.buildRESTCallURL(this.url, SubsonicMethods.DOWNLOAD, params);
-		String extStorageDir = Environment.getExternalStorageDirectory().toString();
-		new DownloadTask(downloadURL, extStorageDir + "/SubsonicClient/" + mediaFile.path, progressDialog).execute();
-	}
+//	/**
+//	 * Begins downloading the original file from the server without transcoding.
+//	 *
+//	 * @param mediaFile	The MediaFile to download.
+//	 * @throws MalformedURLException
+//	 * @throws UnsupportedEncodingException
+//	 */
+//	protected void downloadOriginal(MediaFile mediaFile) throws MalformedURLException, UnsupportedEncodingException {
+//		Map<String, String> params = new HashMap<String, String>();
+//		params.putAll(requiredParams);
+//		params.put("id", Integer.toString(mediaFile.id));
+//
+//		ProgressDialog progressDialog = Util.createPercentProgressDialog(this.context, "Downloading " + mediaFile.name);
+//
+//		URL downloadURL = RESTTask.buildRESTCallURL(this.url, SubsonicMethods.DOWNLOAD, params);
+//		String extStorageDir = Environment.getExternalStorageDirectory().toString();
+//		new DownloadTask(downloadURL, extStorageDir + "/SubsonicClient/" + mediaFile.path, progressDialog).execute();
+//	}
+
 	private static JSONObject parseSubsonicResponse(String responseStr) throws JSONException, SubsonicException {
 		JSONObject jResponse = null;
 		jResponse = new JSONObject(responseStr).getJSONObject("subsonic-response");
@@ -561,126 +604,4 @@ public class SubsonicCaller {
 		
 		return jResponse;
 	}
-//	
-//	public void onRESTResponse(String method, Map<String, Object> callbackParams, String response) {
-//    	try {
-//    		JSONObject jResponse;
-//    		try {
-//    			jResponse = new JSONObject(response).getJSONObject("subsonic-response");
-//    		} catch (NullPointerException e) {
-//    			jResponse = null;
-//    		} catch (JSONException e) {
-//    			jResponse = null;
-//    		}
-//			
-//			// handle Subsonic errors
-//			if (jResponse != null && jResponse.getString("status").equals("failed")) {
-//    			JSONObject err = jResponse.getJSONObject("error");
-//    			throw new SubsonicException(err.getInt("code"), err.getString("message"));
-//    		}
-//    		
-//    		// special handling for ping, because it can handle a null response
-//    		if (method.equals(SubsonicMethods.PING)) {
-//    			this.handler.onPingResponse((jResponse != null && jResponse.getString("status").equals("ok")));
-//    		} else {
-//    			
-//	    		if (method.equals(SubsonicMethods.GET_LICENSE)) {
-//					this.handler.onGetLicenseResponse(new License(jResponse.getJSONObject("license")));
-//					
-//				} else if (method.equals(SubsonicMethods.GET_MEDIA_FOLDERS)) {
-//					List<MediaFolder> mediaFolders = new ArrayList<MediaFolder>();
-//					JSONArray jFolderArr = jResponse.getJSONObject("musicFolders").getJSONArray("musicFolder");
-//					int len = jFolderArr.length();
-//					for (int i = 0; i < len; i++) {
-//						mediaFolders.add(new MediaFolder(jFolderArr.getJSONObject(i)));
-//					}
-//					this.handler.onGetMediaFoldersResponse(mediaFolders);
-//					
-//				} else if (method.equals(SubsonicMethods.LIST_MEDIA_FOLDER_CONTENTS)) {
-//					List<FilesystemEntry> contents = new ArrayList<FilesystemEntry>();
-//					JSONObject jIndexesResponse = jResponse.getJSONObject("indexes");
-//					JSONArray jChildArray = jIndexesResponse.optJSONArray("child");
-//					JSONArray jIndexArray = jIndexesResponse.optJSONArray("index");
-//					
-//					if (jIndexArray != null) {
-//						int jIndexArrayLength = jIndexArray.length();
-//						for (int i = 0; i < jIndexArrayLength; i++) {
-//							JSONObject jIndex = jIndexArray.getJSONObject(i);
-//							
-//							// artist tag can be either an array or an object (if there's only one)
-//							JSONArray jFolderArray = jIndex.optJSONArray("artist");
-//							if (jFolderArray != null) {
-//								int jFolderArrayLength = jFolderArray.length();
-//								for (int j = 0; j < jFolderArrayLength; j++) {
-//									JSONObject jFolder = jFolderArray.getJSONObject(j);
-//									Folder folder = new Folder(jFolder);
-//									contents.add(folder);
-//								}
-//							} else {
-//								JSONObject jFolder = jIndex.getJSONObject("artist");
-//								Folder folder = new Folder(jFolder);
-//								contents.add(folder);
-//							}
-//						}
-//					}
-//					
-//					if (jChildArray != null) {
-//						int jChildArrayLength = jChildArray.length();
-//						for (int i = 0; i < jChildArrayLength; i++) {
-//							contents.add(new MediaFile(jChildArray.getJSONObject(i)));
-//						}
-//					}
-//					
-//					this.handler.onListMediaFolderContentsResponse(contents);
-//					
-//				} else if (method.equals(SubsonicMethods.LIST_FOLDER_CONTENTS)) {
-//					Folder parentFolder = (Folder)callbackParams.get("parentFolder");
-//					List<FilesystemEntry> contents = new ArrayList<FilesystemEntry>();
-//					JSONObject jDirectoryContents = jResponse.getJSONObject("directory");
-//					
-//					JSONArray jChildArray = jDirectoryContents.optJSONArray("child");
-//					if (jChildArray != null) {
-//						int jChildArrayLength = jChildArray.length();
-//						for (int i = 0; i < jChildArrayLength; i++) {
-//							JSONObject jChild = jChildArray.getJSONObject(i);
-//							
-//							FilesystemEntry entry;
-//							if (jChild.getBoolean("isDir")) {
-//								entry = new Folder(jChild);
-//							} else {
-//								entry = new MediaFile(jChild);
-//							}
-//							entry.parent = parentFolder;
-//							contents.add(entry);
-//						}
-//					} else {
-//						JSONObject jChild = jDirectoryContents.optJSONObject("child");
-//						
-//						if (jChild != null) {
-//							FilesystemEntry entry;
-//							if (jChild.getBoolean("isDir")) {
-//								entry = new Folder(jChild);
-//							} else {
-//								entry = new MediaFile(jChild);
-//							}
-//							entry.parent = parentFolder;
-//							contents.add(entry);
-//						}
-//					}
-//					
-//					this.handler.onListFolderContentsResponse(contents);
-//						
-//	    		}
-//    		}
-//		} catch (JSONException e) {
-//			Util.showSingleButtonAlertBox(this.context, e.getLocalizedMessage(), "OK");
-//			e.printStackTrace();
-//		} catch (SubsonicException e) {
-//			Util.showSingleButtonAlertBox(this.context, e.getLocalizedMessage(), "OK");
-//			e.printStackTrace();
-//		} catch (ParseException e) {
-//			Util.showSingleButtonAlertBox(this.context, e.getLocalizedMessage(), "OK");
-//			e.printStackTrace();
-//		}
-//	}
 }

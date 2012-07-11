@@ -14,30 +14,34 @@ public class SubsonicClientActivity extends SherlockFragmentActivity {
 	protected final static String logTag = "SubsonicClientActivity";
 	protected final static String apiVersion = "1.4.0"; // 1.4.0+ required for JSON
 	protected final static String clientId = "Android Subsonic Client";
-	protected List<Download> downloads;
+
+	protected ServerBrowserFragment serverBrowserFragment;
+	protected DownloadManagerFragment downloadManagerFragment;
+
+	protected List<DownloadTask> downloadTasks;
+
+	protected void addAndExecuteDownloadTask(final DownloadTask downloadTask) {
+		this.downloadTasks.add(downloadTask);
+		downloadTask.execute();
+	}
 
 	@Override
 	public void onCreate(final Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		this.setContentView(R.layout.main);
 
-		this.downloads = new ArrayList<Download>();
-//		this.downloads.add(new Download() {{
-//			this.title = "Title";
-//			this.path = "Path";
-//			this.progress = 30;
-//		}});
+		this.downloadTasks = new ArrayList<DownloadTask>();
 
 		ActionBar actionBar = this.getSupportActionBar();
 		actionBar.setNavigationMode(ActionBar.NAVIGATION_MODE_TABS);
 
 		ActionBar.Tab serverBrowserTab = actionBar.newTab().setText("Server");
-		Fragment serverBrowserFragment = new ServerBrowserFragment();
+		serverBrowserFragment = new ServerBrowserFragment();
 		serverBrowserTab.setTabListener(new OnTabActionListener(serverBrowserFragment));
 		actionBar.addTab(serverBrowserTab);
 
 		ActionBar.Tab downloadManagerTab = actionBar.newTab().setText("Downloads");
-		Fragment downloadManagerFragment = new DownloadManagerFragment();
+		downloadManagerFragment = new DownloadManagerFragment();
 		downloadManagerTab.setTabListener(new OnTabActionListener(downloadManagerFragment));
 		actionBar.addTab(downloadManagerTab);
 	}

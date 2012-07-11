@@ -1,5 +1,6 @@
 package com.casamento.subsonicclient;
 
+import android.app.Activity;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -10,23 +11,38 @@ import java.util.List;
 
 public class DownloadManagerFragment extends SherlockListFragment {
 	protected final static String logTag = "DownloadManagerFragment";
-	protected List<Download> downloads;
+	protected List<DownloadTask> downloadTasks;
 
-	public void onCreate(Bundle savedInstanceState) {
+	public void onCreate(final Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 	}
 
 	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
+	public void onActivityCreated(final Bundle savedInstanceState) {
 		super.onActivityCreated(savedInstanceState);
+	}
 
-		downloads = ((SubsonicClientActivity)this.getSherlockActivity()).downloads;
+	// TODO: restore state on attach
+	@Override
+	public void onAttach(Activity activity) {
+		super.onAttach(activity);
+		this.downloadTasks = this.getSubsonicActivity().downloadTasks;
+		this.setListAdapter(new DownloadTaskArrayAdapter(activity, this.downloadTasks));
+	}
 
-		this.setListAdapter(new DownloadArrayAdapter(this.getSherlockActivity(), this.downloads));
+	// TODO: save state on detach
+	@Override
+	public void onDetach() {
+		super.onDetach();
+		this.setListAdapter(null);
 	}
 
 	@Override
-	public View onCreateView(LayoutInflater inflater, ViewGroup viewGroup, Bundle savedInstanceState) {
+	public View onCreateView(final LayoutInflater inflater, final ViewGroup viewGroup, final Bundle savedInstanceState) {
 		return inflater.inflate(R.layout.download_manager_fragment, viewGroup, false);
+	}
+
+	private SubsonicClientActivity getSubsonicActivity() {
+		return (SubsonicClientActivity)this.getSherlockActivity();
 	}
 }

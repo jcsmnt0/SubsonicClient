@@ -20,15 +20,16 @@ import com.actionbarsherlock.app.SherlockListFragment;
 import com.actionbarsherlock.view.Menu;
 import com.actionbarsherlock.view.MenuItem;
 
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Stack;
 
 public class ServerBrowserFragment extends SherlockListFragment implements OnSharedPreferenceChangeListener {
 	private final String logTag = "ServerBrowserFragment";
-	private final ServerBrowserFragment self = this; // for referencing within anonymous classes
 	private SharedPreferences prefs;
 	private List<MediaFolder> mediaFolders;
 	private MediaFolder currentMediaFolder;
@@ -44,6 +45,7 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
 	
     private void connectToServer() {
     	this.caller = new SubsonicCaller(prefs.getString("serverUrl", null), prefs.getString("username", null), prefs.getString("password", null), SubsonicClientActivity.apiVersion, SubsonicClientActivity.clientId, this.getSherlockActivity());
+	    final ServerBrowserFragment self = this;
 		this.caller.getMediaFolders(new OnMediaFoldersResponseListener() {
 			@Override
 			void onMediaFoldersResponse(List<MediaFolder> mediaFolders) {
@@ -128,25 +130,35 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
     		switch(item.getItemId()) {
     			case R.id.fileContextMenu_downloadOriginalFile:
     				try {
-						caller.downloadOriginal(mediaFile);
+					    this.getSubsonicActivity().addAndExecuteDownloadTask(this.caller.getOriginalDownloadTask(mediaFile));
 					} catch (MalformedURLException e) {
 						Util.showSingleButtonAlertBox(this.getSherlockActivity(), "URL incorrect or something", "Forgive me");
 						e.printStackTrace();
 					} catch (UnsupportedEncodingException e) {
 						Log.wtf(logTag, e);
-					}
-    				break;
+					} catch (URISyntaxException e) {
+					    e.printStackTrace();
+				    } catch (IOException e) {
+					    e.printStackTrace();
+				    }
+				    break;
     			
     			case R.id.fileContextMenu_downloadTranscodedFile:
-    				try {
-    					caller.downloadTranscoded(mediaFile, 0, null, 0, null, false);
-    				} catch (MalformedURLException e) {
-						Util.showSingleButtonAlertBox(this.getSherlockActivity(), "URL incorrect or something", "Forgive me");
-						e.printStackTrace();
-					} catch (UnsupportedEncodingException e) {
-						Log.wtf(logTag, e);
-					}
-    				break;
+//    				try {
+//					    DownloadTask downloadTask = this.caller.getTranscodedDownloadTask(mediaFile, 0, null, 0, null, false);
+//					    downloadTask.execute();
+//					    ((SubsonicClientActivity)this.getSherlockActivity()).downloadTasks.add(downloadTask);
+//    				} catch (MalformedURLException e) {
+//						Util.showSingleButtonAlertBox(this.getSherlockActivity(), "URL incorrect or something", "Forgive me");
+//						e.printStackTrace();
+//					} catch (UnsupportedEncodingException e) {
+//						Log.wtf(logTag, e);
+//					} catch (URISyntaxException e) {
+//					    e.printStackTrace();
+//				    } catch (IOException e) {
+//					    e.printStackTrace();
+//				    }
+				    break;
     			
     			case R.id.fileContextMenu_streamFile:
 					try {
@@ -236,7 +248,8 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
     	
     	dialog.show();
     }
-    
+
+	// TODO: push new fragment instead (so OS handles back button)
     private void setCurrentMediaFolder(final MediaFolder mediaFolder) {
     	this.currentMediaFolder = mediaFolder;
     	this.currentFolder = null;
@@ -244,6 +257,7 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
 		this.getSherlockActivity().getSupportActionBar().setDisplayHomeAsUpEnabled(false);
     	
     	if (this.currentMediaFolder == null || this.currentMediaFolder.contents == null) {
+		    final ServerBrowserFragment self = this;
     		this.caller.listMediaFolderContents(this.currentMediaFolder, null, new OnMediaFolderContentsResponseListener() {
 				@Override
 				void onMediaFolderContentsResponse(List<FilesystemEntry> contents) {
@@ -268,11 +282,13 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
     		this.getSherlockActivity().setTitle(mediaFolder.name);
     	}
     }
-    
+
+	// TODO: push new fragment instead (so OS handles back button)
     private void setCurrentFolder(final Folder folder) {
     	this.currentFolder = folder;
     	    	
     	if (this.currentFolder.contents == null) {
+		    final ServerBrowserFragment self = this;
     		this.caller.listFolderContents(folder, new OnFolderContentsResponseListener() {
     			@Override
     			public void onFolderContentsResponse(java.util.List<FilesystemEntry> contents) {
@@ -297,10 +313,12 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
     		this.getSherlockActivity().getSupportActionBar().setDisplayHomeAsUpEnabled(true);
     	}
     }
-    
+
+	// TODO: push new fragment instead (so OS handles back button)
     private void showFolderContents(final Folder folder) {
     	this.setListAdapter(new FilesystemEntryArrayAdapter(this.getSherlockActivity(), folder.contents));
 
+	    final ServerBrowserFragment self = this;
     	this.listView.setOnItemClickListener(new OnItemClickListener() {
     		public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
     			
@@ -329,15 +347,9 @@ public class ServerBrowserFragment extends SherlockListFragment implements OnSha
     	// TODO: maybe scroll text on swipe/some other action via view.setSelected(true)
     }
 
-	public void onGetMediaFoldersResponse(final List<MediaFolder> mediaFolders) {
-		this.mediaFolders = mediaFolders;
-		this.mediaFolders.add(0, null);
-	}
-
-	public void onListFolderContentsResponse(final List<FilesystemEntry> contents) {
-		this.currentFolder.contents = contents;
-		this.showFolderContents(this.currentFolder);
-		this.getSherlockActivity().setTitle(this.currentFolder.name);
+	// just a little shortcut to avoid some horrible nested parentheses
+	private SubsonicClientActivity getSubsonicActivity() {
+		return (SubsonicClientActivity)this.getSherlockActivity();
 	}
 }
 	
