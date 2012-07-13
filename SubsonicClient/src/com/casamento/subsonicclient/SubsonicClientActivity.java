@@ -56,7 +56,7 @@ public class SubsonicClientActivity extends SherlockFragmentActivity {
 	public boolean onOptionsItemSelected(com.actionbarsherlock.view.MenuItem item) {
 		switch (item.getItemId()) {
 			case R.id.option_preferences:
-				Intent settingsActivity = new Intent(this.getBaseContext(), SupportPreferenceActivity.class);
+				Intent settingsActivity = new Intent(this.getBaseContext(), PreferenceActivity.class);
 				startActivity(settingsActivity);
 				return true;
 

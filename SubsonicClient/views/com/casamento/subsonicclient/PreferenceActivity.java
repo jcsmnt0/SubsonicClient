@@ -1,7 +1,5 @@
 package com.casamento.subsonicclient;
 
-import java.util.Arrays;
-
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
 import android.os.Bundle;
@@ -9,8 +7,9 @@ import android.preference.EditTextPreference;
 import android.preference.Preference;
 import android.preference.Preference.OnPreferenceClickListener;
 import android.text.InputType;
-
 import com.actionbarsherlock.app.SherlockPreferenceActivity;
+
+import java.util.Arrays;
 
 public class PreferenceActivity extends SherlockPreferenceActivity implements OnSharedPreferenceChangeListener {
 	final PreferenceActivity self = this;
@@ -22,18 +21,20 @@ public class PreferenceActivity extends SherlockPreferenceActivity implements On
 		
     	addPreferencesFromResource(R.xml.server_prefs);
         
-        Preference testConnection = this.findPreference("testConnection");
+        final Preference testConnection = this.findPreference("testConnection");
         testConnection.setOnPreferenceClickListener(new OnPreferenceClickListener() {
 			public boolean onPreferenceClick(Preference preference) {
-				SharedPreferences prefs = getPreferenceScreen().getSharedPreferences();
+				//SharedPreferences prefs = getPreferenceScreen().getSharedPreferences();
+				SharedPreferences prefs = getPreferenceManager().getSharedPreferences();
 				SubsonicCaller caller = new SubsonicCaller(prefs.getString("serverUrl", ""), prefs.getString("username", ""), prefs.getString("password", ""), "1.4.0", "SubsonicClient_v0.0.0.1.0_pre-pre-alpha", getBaseContext());
+				testConnection.setSummary("Testing connection...");
 				caller.ping(new OnPingResponseListener() {
 					@Override
 					void onPingResponse(boolean ok) {
 						if (ok)
-							Util.showSingleButtonAlertBox(null, "Success!", "Hooray!");
-//						else
-//							Util.showSingleButtonAlertBox(getBaseContext(), "Failure.", "Sadness");
+							testConnection.setSummary("Success!");
+						else
+							testConnection.setSummary("Failure.");
 					}
 				});
 				return true;

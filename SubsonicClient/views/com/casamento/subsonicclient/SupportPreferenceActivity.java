@@ -68,10 +68,7 @@ public class SupportPreferenceActivity extends PreferenceActivity implements OnS
 					caller.ping(new OnPingResponseListener() {
 						@Override
 						void onPingResponse(boolean ok) {
-							if (ok)
-								Util.showSingleButtonAlertBox(getBaseContext(), "Success!", "Hooray!");
-							else
-								Util.showSingleButtonAlertBox(getBaseContext(), "Failure.", "Sadness");
+
 						}
 					});
 					return true;
@@ -154,10 +151,10 @@ public class SupportPreferenceActivity extends PreferenceActivity implements OnS
 					caller.ping(new OnPingResponseListener() {
 						@Override
 						void onPingResponse(boolean ok) {
-							if (ok)
-								Util.showSingleButtonAlertBox(getActivity(), "Success!", "Hooray!");
-							else
-								Util.showSingleButtonAlertBox(getActivity(), "Failure.", "Sadness");
+//							if (ok)
+//								Util.showSingleButtonAlertBox(getActivity(), "Success!", "Hooray!");
+//							else
+//								Util.showSingleButtonAlertBox(getActivity(), "Failure.", "Sadness");
 						}
 					});
 					return true;

@@ -264,7 +264,7 @@ class SubsonicCaller {
 	 * Tests connectivity with the server.
 	 */
 	protected void ping(final OnPingResponseListener callbackListener) {
-		callMethod(SubsonicMethods.PING, Util.createIndeterminateProgressDialog(this.context, "Checking connection to server..."), new OnRESTResponseListener() {
+		callMethod(SubsonicMethods.PING, new HashMap<String, String>(), new OnRESTResponseListener() {
 			public void onRESTResponse(String responseStr) {
 				boolean ok;
 				
@@ -272,13 +272,16 @@ class SubsonicCaller {
 					JSONObject jResponse = parseSubsonicResponse(responseStr);
 					ok = (jResponse.getString("status").equals("ok"));
 				} catch (JSONException e) {
-					Log.d(logTag, e.toString());
+					Log.e(logTag, e.toString());
 					ok = false;
 				} catch (SubsonicException e) {
-					Log.d(logTag, e.toString());
+					Log.e(logTag, e.toString());
 					ok = false;
 				} catch (NullPointerException e) {
-					Log.d(logTag, e.toString());
+					Log.e(logTag, e.toString());
+					ok = false;
+				} catch (Exception e) {
+					Log.e(logTag, e.toString());
 					ok = false;
 				}
 				

@@ -18,6 +18,7 @@ class DownloadTask extends AsyncTask<Void, Long, String> {
 	private TextView progressView;
 	private ProgressBar progressBar;
 	private long contentLength;
+	private long progress;
 	protected String name, savePath;
 	protected URL url;
 
@@ -29,6 +30,7 @@ class DownloadTask extends AsyncTask<Void, Long, String> {
 
 	protected void attachProgressView(TextView progressView) {
 		this.progressView = progressView;
+		this.progressView.setText(this.progress + "/" + this.contentLength + " bytes");
 	}
 	
 	@Override
@@ -39,9 +41,10 @@ class DownloadTask extends AsyncTask<Void, Long, String> {
 	@Override
 	protected void onProgressUpdate(Long... progress) {
 		super.onProgressUpdate(progress);
+		this.progress = progress[0];
 
 		if (this.progressView != null) {
-			this.progressView.setText(progress[0].toString() + "/" + Long.toString(this.contentLength) + " bytes");
+			this.progressView.setText(this.progress + "/" + this.contentLength + " bytes");
 		}
 	}
 	

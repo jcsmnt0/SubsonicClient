@@ -1,9 +1,10 @@
 package com.casamento.subsonicclient;
 
-import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.text.Html;
+import com.actionbarsherlock.app.SherlockDialogFragment;
+import com.actionbarsherlock.app.SherlockFragmentActivity;
 
 import java.text.DateFormat;
 import java.text.ParseException;
@@ -25,11 +26,9 @@ public final class Util {
 		return c;
 	}
 	
-	public static void showSingleButtonAlertBox(final Context context, final String message, final String buttonText) {
-		AlertDialog.Builder alertBox = new AlertDialog.Builder(context);
-		alertBox.setMessage(message);
-		alertBox.setNeutralButton(buttonText, null);
-		alertBox.show();
+	public static void showSingleButtonAlertBox(final SherlockFragmentActivity activity, final String message, final String buttonText) {
+		SherlockDialogFragment alertDialogFragment = AlertDialogFragment.newInstance(message);
+		alertDialogFragment.show(activity.getSupportFragmentManager(), "dialog");
 	}
 
 	// TODO: read Content-Length header of JSON and use ActionBar progress bar instead of this
