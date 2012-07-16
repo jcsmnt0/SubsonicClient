@@ -43,4 +43,15 @@
     <string name="test_connection">Test Connection</string>
     <string name="test_connection_summary"></string>
 
+	<string name="please_wait">Please wait...</string>
+	<string name="testing_connection">Testing connection...</string>
+	<string name="missing_password">No password entered</string>
+	<string name="missing_username">No username entered</string>
+	<string name="missing_server_url">No server URL entered</string>
+	<string name="success">Success!</string>
+	<string name="failure">Failure.</string>
+	<string name="error">Error!</string>
+	<string name="download_original">Download Original</string>
+	<string name="download_transcoded">Download Transcoded</string>
+
 </resources>

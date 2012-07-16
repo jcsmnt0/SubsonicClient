@@ -23,7 +23,7 @@
             </intent-filter>
         </activity>
         
-        <activity android:name="PreferenceActivity"
+        <activity android:name=".PreferenceActivity"
 	        android:label="Settings"
 	        android:enabled="true"
 	        android:configChanges="orientation|keyboardHidden|screenSize" >

@@ -14,6 +14,7 @@
             android:name="@string/username_pref_name"
             android:summary="@string/username_pref_summary"
             android:title="@string/username_pref_title"
+            android:inputType="text"
             android:key="username"
             />
         <EditTextPreference 

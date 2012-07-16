@@ -10,8 +10,7 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.DefaultHttpClient;
 
 import java.io.*;
-import java.net.URISyntaxException;
-import java.net.URL;
+import java.net.URI;
 
 class DownloadTask extends AsyncTask<Void, Long, String> {
 	private final String logTag = "DownloadTask";
@@ -19,18 +18,63 @@ class DownloadTask extends AsyncTask<Void, Long, String> {
 	private ProgressBar progressBar;
 	private long contentLength;
 	private long progress;
-	protected String name, savePath;
-	protected URL url;
+	private String name, savePath;
+	private URI uri;
+	private OnDownloadTaskCompletedListener callbackListener;
 
-	protected DownloadTask(final URL url, final String name, final String savePath) {
-		this.url = url;
+	protected String getName() {
+		return name;
+	}
+
+	protected String getSavePath() {
+		return savePath;
+	}
+
+	protected interface OnDownloadTaskCompletedListener {
+		void onDownloadTaskCompleted(DownloadTask task);
+	}
+
+	private enum ByteSize {
+		KB(1L << 10),
+		MB(1L << 20),
+		GB(1L << 30),
+		TB(1L << 40); // hopefully nobody is downloading files bigger than 1024 terabytes
+
+		private final long size;
+		private ByteSize(long size) {
+			this.size = size;
+		}
+
+		public static String getByteString(long bytes) {
+			if (bytes >= TB.size) {
+				return String.format("%.2fTB", (double)bytes / TB.size);
+			} else if (bytes >= GB.size) {
+				return String.format("%.2fGB", (double)bytes / GB.size);
+			} else if (bytes >= MB.size) {
+				return String.format("%.2fMB", (double)bytes / MB.size);
+			} else if (bytes >= KB.size) {
+				return String.format("%.2fKB", (double)bytes / KB.size);
+			}
+			else return String.format("%dB", bytes);
+		}
+	}
+
+	protected DownloadTask(final URI uri, final String name, final String savePath) {
+		this.uri = uri;
 		this.name = name;
 		this.savePath = savePath;
 	}
 
-	protected void attachProgressView(TextView progressView) {
+	protected void setProgressView(TextView progressView) {
 		this.progressView = progressView;
-		this.progressView.setText(this.progress + "/" + this.contentLength + " bytes");
+		this.progressView.setText(ByteSize.getByteString(this.progress) + "/" + ByteSize.getByteString(this.contentLength));
+	}
+
+	protected void setProgressBar(ProgressBar progressBar) {
+		this.progressBar = progressBar;
+		this.progressBar.setIndeterminate(this.contentLength > 0);
+		this.progressBar.setMax((int)this.contentLength); // this may cause issues with files of >10GB
+		this.progressBar.setProgress((int)this.progress);
 	}
 	
 	@Override
@@ -44,17 +88,22 @@ class DownloadTask extends AsyncTask<Void, Long, String> {
 		this.progress = progress[0];
 
 		if (this.progressView != null) {
-			this.progressView.setText(this.progress + "/" + this.contentLength + " bytes");
+			this.progressView.setText(ByteSize.getByteString(this.progress) + "/" + ByteSize.getByteString(this.contentLength));
+		}
+
+		if (this.progressBar != null) {
+			this.progressBar.setMax((int)this.contentLength); // this may cause issues with files of >10GB
+			this.progressBar.setProgress((int)this.progress);
 		}
 	}
-	
+
 	@Override
 	protected String doInBackground(Void... params) {
 		try {
 			HttpClient httpClient = new DefaultHttpClient();
 			HttpGet httpGet;
 			
-			httpGet = new HttpGet(this.url.toURI());
+			httpGet = new HttpGet(this.uri);
 			HttpResponse response = httpClient.execute(httpGet);
 			HttpEntity entity = response.getEntity();
 			
@@ -66,13 +115,6 @@ class DownloadTask extends AsyncTask<Void, Long, String> {
 
 				this.contentLength = entity.getContentLength();
 				boolean indeterminate = (contentLength <= 0);
-
-//				if (!indeterminate) {
-//					this.progressBar.setMax((int)contentLength);
-//					this.progressBar.setIndeterminate(false);
-//				} else {
-//					this.progressBar.setVisibility(View.GONE);
-//				}
 				
 				byte data[] = new byte[1024];
 				long total = 0;
@@ -89,9 +131,14 @@ class DownloadTask extends AsyncTask<Void, Long, String> {
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
-		} catch (URISyntaxException e) {
-			e.printStackTrace();
 		}
 		return null;
+	}
+
+	@Override
+	protected void onPostExecute(String s) {
+		super.onPostExecute(s);
+		if (callbackListener != null)
+			callbackListener.onDownloadTaskCompleted(this);
 	}
 }
