@@ -41,7 +41,7 @@ public class LoadingDialogFragment extends DialogFragment {
 	}
 
 	public LoadingDialogFragment(final String message, OnCancelListener cancelListener) {
-		this.message = message;
+		this(message);
 		this.cancelListener = cancelListener;
 	}
 

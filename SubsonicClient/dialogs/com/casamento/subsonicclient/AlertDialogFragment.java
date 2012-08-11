@@ -31,6 +31,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.os.Bundle;
 import com.actionbarsherlock.app.SherlockDialogFragment;
+import com.actionbarsherlock.app.SherlockFragmentActivity;
 
 // TODO: implement .show(FragmentActivity) instead of using fragmentActivity.showDialog(dialog)
 class AlertDialogFragment extends SherlockDialogFragment {
@@ -58,6 +59,17 @@ class AlertDialogFragment extends SherlockDialogFragment {
 				.setTitle(title)
 				.setMessage(message)
 				.setNeutralButton(R.string.ok));
+	}
+
+	public AlertDialogFragment(final Context context, final int title, final int message) {
+		this(new Builder(context)
+				.setTitle(title)
+				.setMessage(message)
+				.setNeutralButton(R.string.ok));
+	}
+
+	void show(SherlockFragmentActivity fragmentActivity) {
+		this.show(fragmentActivity.getSupportFragmentManager(), "dialog");
 	}
 
 	protected static class Builder {

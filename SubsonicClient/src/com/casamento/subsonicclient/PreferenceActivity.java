@@ -68,7 +68,8 @@ public class PreferenceActivity extends SherlockPreferenceActivity implements On
 				testConnection.setSummary(getString(R.string.testing_connection));
 
 				try {
-					new SubsonicCaller(serverUrl, username, password, self).ping(new SubsonicCaller.OnPingResponseListener() {
+					SubsonicCaller.setServerDetails(serverUrl, username, password, self);
+					SubsonicCaller.ping(new SubsonicCaller.OnPingResponseListener() {
 						@Override
 						public void onPingResponse(boolean ok) {
 							testConnection.setSummary(ok ? getString(R.string.success) : getString(R.string.failure));

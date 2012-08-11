@@ -34,45 +34,55 @@ import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentTransaction;
 import com.actionbarsherlock.app.ActionBar;
 import com.actionbarsherlock.app.SherlockFragmentActivity;
+import com.actionbarsherlock.view.Window;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class SubsonicClientActivity extends SherlockFragmentActivity implements ServerBrowserFragment.ActivityCallbackInterface,
-																				DownloadManagerFragment.ActivityCallbackInterface {
+import static com.casamento.subsonicclient.SubsonicCaller.*;
+
+public class SubsonicClientActivity extends SherlockFragmentActivity
+		implements ServerBrowserFragment.ActivityCallbackInterface, DownloadManagerFragment.ActivityCallbackInterface {
+
 	protected static final String logTag = "SubsonicClientActivity";
 
-	// for fragment management
-	private ServerBrowserFragment serverBrowserFragment;
-	private DownloadManagerFragment downloadManagerFragment;
+	static boolean serverConnected = false;
 
-	// for com.casamento.subsonicclient.DownloadManagerFragment
-	private List<DownloadTask> downloadTasks;
+	// for fragment management
+	private ServerBrowserFragment mServerBrowserFragment;
+	private DownloadManagerFragment mDownloadManagerFragment;
+
+	// for DownloadManagerFragment
+	private List<DownloadTask> mDownloadTasks;
 
 	@Override
 	public void onCreate(final Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		this.setContentView(R.layout.main);
 
-		ActionBar actionBar = this.getSupportActionBar();
+		requestWindowFeature(Window.FEATURE_INDETERMINATE_PROGRESS);
+		setSupportProgressBarIndeterminateVisibility(false);
+
+		setContentView(R.layout.main);
+
+		ActionBar actionBar = getSupportActionBar();
 		actionBar.setNavigationMode(ActionBar.NAVIGATION_MODE_TABS);
 
 		class OnTabActionListener implements ActionBar.TabListener {
-			private Fragment fragment;
+			private Fragment mFragment;
 
 			public OnTabActionListener(Fragment fragment) {
 				super();
-				this.fragment = fragment;
+				mFragment = fragment;
 			}
 
 			@Override
 			public void onTabSelected(ActionBar.Tab tab, FragmentTransaction ft) {
-				ft.replace(R.id.fragment_container, fragment);
+				ft.replace(R.id.fragment_container, mFragment);
 			}
 
 			@Override
 			public void onTabUnselected(ActionBar.Tab tab, FragmentTransaction ft) {
-				ft.remove(fragment);
+				ft.remove(mFragment);
 			}
 
 			@Override
@@ -82,22 +92,22 @@ public class SubsonicClientActivity extends SherlockFragmentActivity implements 
 		}
 
 		ActionBar.Tab serverBrowserTab = actionBar.newTab().setText("Server");
-		serverBrowserFragment = new ServerBrowserFragment();
-		serverBrowserTab.setTabListener(new OnTabActionListener(serverBrowserFragment));
+		mServerBrowserFragment = new ServerBrowserFragment();
+		serverBrowserTab.setTabListener(new OnTabActionListener(mServerBrowserFragment));
 		actionBar.addTab(serverBrowserTab);
 
 		ActionBar.Tab downloadManagerTab = actionBar.newTab().setText("Downloads");
-		downloadManagerFragment = new DownloadManagerFragment();
-		downloadManagerTab.setTabListener(new OnTabActionListener(downloadManagerFragment));
+		mDownloadManagerFragment = new DownloadManagerFragment();
+		downloadManagerTab.setTabListener(new OnTabActionListener(mDownloadManagerFragment));
 		actionBar.addTab(downloadManagerTab);
 
-		// for com.casamento.subsonicclient.DownloadManagerFragment
-		this.downloadTasks = new ArrayList<DownloadTask>();
+		// for DownloadManagerFragment
+		mDownloadTasks = new ArrayList<DownloadTask>();
 	}
 
 	@Override
 	public boolean onCreateOptionsMenu(final com.actionbarsherlock.view.Menu menu) {
-		this.getSupportMenuInflater().inflate(R.menu.optionsmenu_main, menu);
+		getSupportMenuInflater().inflate(R.menu.optionsmenu_main, menu);
 		return true;
 	}
 
@@ -105,7 +115,7 @@ public class SubsonicClientActivity extends SherlockFragmentActivity implements 
 	public boolean onOptionsItemSelected(final com.actionbarsherlock.view.MenuItem item) {
 		switch (item.getItemId()) {
 			case R.id.option_preferences:
-				Intent settingsActivity = new Intent(this.getBaseContext(), PreferenceActivity.class);
+				Intent settingsActivity = new Intent(getBaseContext(), PreferenceActivity.class);
 				startActivity(settingsActivity);
 				return true;
 
@@ -119,33 +129,59 @@ public class SubsonicClientActivity extends SherlockFragmentActivity implements 
 
 	@Override
 	public void initiateDownload(final DownloadTask downloadTask) {
-		this.downloadTasks.add(downloadTask);
+		mDownloadTasks.add(downloadTask);
 		downloadTask.execute();
 	}
 
+	class ServerNotSetUpException extends Exception {
+		ServerNotSetUpException(String message) { super(message); }
+	}
+
 	@Override
-	public SubsonicCaller getSubsonicCaller() throws IllegalStateException {
+	public void connectToServer() throws ServerNotSetUpException {
 		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
 
 		String serverUrl, username, password;
 		if ((serverUrl = prefs.getString("serverUrl", "")).equals("") ||
 				(username = prefs.getString("username", "")).equals("") ||
 				(password = prefs.getString("password", "")).equals(""))
-			throw new IllegalStateException("The server has not been fully set up.");
+			throw new ServerNotSetUpException("The server has not been fully set up.");
 
-		return new SubsonicCaller(serverUrl, username, password, this);
+		setServerDetails(serverUrl, username, password, this);
+		serverConnected = true;
+	}
+
+	@Override
+	public RetrieveCursorTask getRetrieveCursorTask(OnCursorRetrievedListener callbackListener) throws ServerNotSetUpException {
+		if (!serverConnected) connectToServer();
+		return new RetrieveCursorTask(callbackListener);
+	}
+
+	@Override
+	public RetrieveCursorTask getRetrieveCursorTask(FilesystemEntry.Folder folder, OnCursorRetrievedListener callbackListener) throws ServerNotSetUpException {
+		if (!serverConnected) connectToServer();
+		return new RetrieveCursorTask(folder, callbackListener);
 	}
 
 	@Override
 	public void showDialogFragment(DialogFragment dialogFragment) {
-		dialogFragment.show(this.getSupportFragmentManager(), "dialog");
+		dialogFragment.show(getSupportFragmentManager(), "dialog");
 	}
 
+	@Override
+	public void showProgressSpinner() {
+		setSupportProgressBarIndeterminateVisibility(true);
+	}
+
+	@Override
+	public void hideProgressSpinner() {
+		setSupportProgressBarIndeterminateVisibility(false);
+	}
 
 	// DownloadManagerInterface methods
 
 	@Override
 	public List<DownloadTask> getDownloadTasks() {
-		return this.downloadTasks;
+		return mDownloadTasks;
 	}
 }
