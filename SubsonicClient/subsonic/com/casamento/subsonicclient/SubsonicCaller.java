@@ -35,10 +35,14 @@ import android.database.sqlite.SQLiteOpenHelper;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Environment;
+import android.util.Base64;
 import android.util.Log;
-import org.apache.http.HttpResponse;
+import org.apache.http.*;
+import org.apache.http.auth.AuthenticationException;
+import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.auth.BasicScheme;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -53,8 +57,8 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLEncoder;
 import java.text.ParseException;
+import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static com.casamento.subsonicclient.SubsonicCaller.DatabaseHelper.*;
@@ -63,7 +67,7 @@ class SubsonicCaller extends RESTCaller {
 	private static final String API_VERSION = "1.4.0"; // 1.4.0+ required for JSON
 	private static final String CLIENT_ID = "Android Subsonic Client";
 	private static final String logTag = "SubsonicCaller";
-	private static String mServerUrl;
+	private static String mServerUrl, mUsername, mPassword;
 	private static Map<String, String> mRequiredParams;
 	private static Activity mActivity;
 	private static DatabaseHelper mDatabaseHelper;
@@ -275,28 +279,8 @@ class SubsonicCaller extends RESTCaller {
 		static final String CHANGE_USER_PASSWORD = "changePassword.view";
 	}
 
-	protected static interface OnExceptionListener {
-		void onException(Exception e);
-	}
-
 	protected static interface OnPingResponseListener {
 		void onPingResponse(final boolean ok);
-	}
-
-	protected static interface OnLicenseResponseListener extends OnExceptionListener {
-		void onLicenseResponse(final License license);
-	}
-
-	protected static interface OnMediaFolderContentsResponseListener extends OnExceptionListener {
-		void onMediaFolderContentsResponse(final List<FilesystemEntry> contents);
-	}
-
-	protected static interface OnFolderContentsResponseListener extends OnExceptionListener {
-		void onFolderContentsResponse(final List<FilesystemEntry> contents);
-	}
-
-	protected static interface OnMediaFoldersResponseListener extends OnExceptionListener {
-		void onMediaFoldersResponse(final List<MediaFolder> mediaFolders);
 	}
 
 	static class DatabaseHelper extends SQLiteOpenHelper {
@@ -427,12 +411,13 @@ class SubsonicCaller extends RESTCaller {
 	static void setServerDetails(final String serverUrl, final String username, final String password,
 			final Activity activity) {
 		mServerUrl = serverUrl + "/rest/";
+		mUsername = username;
+		mPassword = password;
+
 		mActivity = activity;
 		mDatabaseHelper = getInstance(mActivity);
 
 		mRequiredParams = new HashMap<String, String>() {{
-			put("u", username);
-			put("p", password);
 			put("v", SubsonicCaller.API_VERSION);
 			put("c", SubsonicCaller.CLIENT_ID);
 			put("f", "json"); // XML isn't supported, for now at least
@@ -452,9 +437,10 @@ class SubsonicCaller extends RESTCaller {
 	}
 
 	static void ping(final OnPingResponseListener callbackListener) throws UnsupportedEncodingException, MalformedURLException, URISyntaxException {
-		SubsonicCaller.call(mServerUrl, Methods.PING, mRequiredParams, new OnRESTResponseListener() {
+		new RetrieveRestResponseTask(buildRestCallUri(mServerUrl, Methods.PING,
+				mRequiredParams).toString(), mUsername, mPassword, new OnRestResponseListener() {
 			@Override
-			public void onRESTResponse(String responseStr) {
+			public void onRestResponse(String responseStr) {
 				boolean ok;
 
 				try {
@@ -472,7 +458,7 @@ class SubsonicCaller extends RESTCaller {
 			public void onException(Exception e) {
 				callbackListener.onPingResponse(false);
 			}
-		});
+		}).execute((Void) null);
 	}
 
 	private static String getRestMethodCallUrl(String serverUrl, String method, Map<String, String> params) {
@@ -498,11 +484,11 @@ class SubsonicCaller extends RESTCaller {
 				query += URLEncoder.encode(param.getKey(), "UTF-8") + "=" +
 						URLEncoder.encode(param.getValue(), "UTF-8") + "&";
 			} catch (UnsupportedEncodingException e) {
-				// if happens, the whole OS has gone to shit
+				// if this happens, the whole OS has gone to shit
 				throw new AssertionError("UTF-8 not supported");
 			}
 
-		// trim trailing &
+		// trim trailing '&'
 		query = query.substring(0, query.length() - 1);
 		call += "?" + query;
 
@@ -520,7 +506,41 @@ class SubsonicCaller extends RESTCaller {
 		void onException(Exception e);
 	}
 
-	static class RetrieveCursorTask extends AsyncTask<Void, Integer, Cursor> {
+	static interface OnRestResponseListener {
+		void onRestResponse(String responseStr);
+		void onException(Exception e);
+	}
+
+	static class RetrieveRestResponseTask extends RestCallTask<Void, Void, String> {
+		private final String mUrl, mUsername, mPassword;
+		private OnRestResponseListener mCallbackListener;
+
+		RetrieveRestResponseTask(final String url, final String username, final String password,
+				final OnRestResponseListener callbackListener) {
+			mUrl = url;
+			mUsername = username;
+			mPassword = password;
+			mCallbackListener = callbackListener;
+		}
+
+		@Override
+		protected String doInBackground(Void... nothing) {
+			try {
+				return getRestResponse(mUrl, mUsername, mPassword);
+			} catch (Exception e) {
+				mCallbackListener.onException(e);
+				return null;
+			}
+		}
+
+		@Override
+		protected void onPostExecute(String s) {
+			if (s != null)
+				mCallbackListener.onRestResponse(s);
+		}
+	}
+
+	static class RetrieveCursorTask extends RestCallTask<Void, Integer, Cursor> {
 		private final static String logTag = "RetrieveCursorTask";
 		private final FilesystemEntry.Folder mFolder;
 		private final OnCursorRetrievedListener mCallbackListener;
@@ -535,24 +555,6 @@ class SubsonicCaller extends RESTCaller {
 		RetrieveCursorTask(FilesystemEntry.Folder folder, OnCursorRetrievedListener callbackListener) {
 			mFolder = folder;
 			mCallbackListener = callbackListener;
-		}
-
-		private String getRestResponse(String restUrl) throws IOException {
-			HttpClient client = new DefaultHttpClient();
-			HttpGet get = new HttpGet(restUrl);
-			HttpResponse response = client.execute(get);
-
-			InputStream input = new BufferedInputStream(response.getEntity().getContent());
-			StringBuilder responseData = new StringBuilder();
-			int bytesRead = 1;
-			byte[] buffer = new byte[1024];
-
-			while (bytesRead > 0 && !isCancelled()) {
-				bytesRead = input.read(buffer);
-				if (bytesRead > 0) responseData.append(new String(buffer, 0, bytesRead));
-			}
-
-			return responseData.toString();
 		}
 
 		private void insertJSONObject(JSONObject jEntry, int parentId) throws ParseException, JSONException {
@@ -578,7 +580,8 @@ class SubsonicCaller extends RESTCaller {
 					return cursor;
 
 				try {
-					String response = getRestResponse(getRestMethodCallUrl(mServerUrl, Methods.GET_MEDIA_FOLDERS));
+					String response = getRestResponse(getRestMethodCallUrl(mServerUrl, Methods.GET_MEDIA_FOLDERS),
+							mUsername, mPassword);
 					if (isCancelled()) return null;
 
 					JSONObject jResponse = parseSubsonicResponse(response);
@@ -692,7 +695,7 @@ class SubsonicCaller extends RESTCaller {
 		if (estimateContentLength)
 			params.put("estimateContentLength", "true");
 
-		Uri streamUri = Uri.parse(buildRESTCallURI(mServerUrl, Methods.STREAM, params).toString());
+		Uri streamUri = Uri.parse(buildRestCallUri(mServerUrl, Methods.STREAM, params).toString());
 		Intent intent = new Intent(Intent.ACTION_VIEW);
 		Log.d(logTag, Boolean.toString(mediaFile.isVideo));
 		if (mediaFile.isVideo)
@@ -717,7 +720,7 @@ class SubsonicCaller extends RESTCaller {
 	 *
 	 */
 	static DownloadTask getTranscodedDownloadTask(final FilesystemEntry.MediaFile mediaFile, final int maxBitRate, final String format, final int timeOffset, final String videoSize, final boolean estimateContentLength) throws IOException, URISyntaxException {
-		URI downloadURL = buildRESTCallURI(mServerUrl, Methods.STREAM, new HashMap<String, String>(mRequiredParams) {{
+		URI downloadURL = buildRestCallUri(mServerUrl, Methods.STREAM, new HashMap<String, String>(mRequiredParams) {{
 			put("id", Integer.toString(mediaFile.id));
 			if (maxBitRate > 0)
 				put("maxBitRate", Integer.toString(maxBitRate));
@@ -743,7 +746,7 @@ class SubsonicCaller extends RESTCaller {
 	 *
 	 */
 	static DownloadTask getOriginalDownloadTask(final FilesystemEntry.MediaFile mediaFile) throws IOException, UnsupportedEncodingException, URISyntaxException {
-		URI downloadURL = buildRESTCallURI(mServerUrl, Methods.DOWNLOAD, new HashMap<String, String>(mRequiredParams) {{
+		URI downloadURL = buildRestCallUri(mServerUrl, Methods.DOWNLOAD, new HashMap<String, String>(mRequiredParams) {{
 			put("id", Integer.toString(mediaFile.id));
 		}});
 

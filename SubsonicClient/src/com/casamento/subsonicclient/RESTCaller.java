@@ -4,11 +4,15 @@ import android.os.AsyncTask;
 import android.util.Log;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
+import org.apache.http.auth.AuthenticationException;
+import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.auth.BasicScheme;
 import org.apache.http.impl.client.DefaultHttpClient;
 
 import java.io.BufferedInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.*;
@@ -17,12 +21,7 @@ import java.util.Map;
 class RESTCaller {
 	private static final String logTag = "RESTCaller";
 
-	static interface OnRESTResponseListener {
-		void onRESTResponse(String responseStr);
-		void onException(Exception e);
-	}
-
-	protected static URI buildRESTCallURI(String restUrl, String method, Map<String, String> params) throws MalformedURLException, UnsupportedEncodingException, URISyntaxException {
+	protected static URI buildRestCallUri(String restUrl, String method, Map<String, String> params) throws MalformedURLException, UnsupportedEncodingException, URISyntaxException {
 		String urlStr = "";
 
 		// assume http if no protocol given
@@ -49,63 +48,59 @@ class RESTCaller {
 		return new URI(urlStr);
 	}
 
-	protected static void call(String restUrl, String method, OnRESTResponseListener callbackListener) throws UnsupportedEncodingException, URISyntaxException, MalformedURLException {
-		new RESTTask(RESTCaller.buildRESTCallURI(restUrl, method, null), callbackListener).execute();
-	}
-	protected static void call(String restUrl, String method, Map<String, String> params, OnRESTResponseListener callbackListener) throws UnsupportedEncodingException, URISyntaxException, MalformedURLException {
-		new RESTTask(RESTCaller.buildRESTCallURI(restUrl, method, params), callbackListener).execute();
-	}
+	static abstract class RestCallTask<Params, Progress, Result> extends AsyncTask<Params, Progress, Result> {
+		/**
+		 * @param input the InputStream to read from
+		 * @return all of the data in the InputStream
+		 * @throws IOException
+		 */
+		private String readAllFromStream(InputStream input) throws IOException {
+			String responseData = "";
+			int bytesRead = 1;
+			byte[] buffer = new byte[1024];
 
-	protected static class RESTTask extends AsyncTask<Void, Integer, String> {
-		private final static String logTag = "RESTTask";
-		private final URI restURI;
-		private final OnRESTResponseListener callbackListener;
+			while (bytesRead > 0 && !isCancelled()) {
+				bytesRead = input.read(buffer);
+				if (bytesRead > 0)
+					responseData += new String(buffer, 0, bytesRead);
+			}
+
+			return responseData;
+		}
 
 		/**
-		 * @param restURI			The URI of the REST service.
-		 * @param callbackListener  The OnRESTResponseListener that will handle the callback.
+		 * @param restUrl the URL of the REST call
+		 * @return the response data as a String
+		 * @throws IOException
 		 */
-		protected RESTTask(URI restURI, OnRESTResponseListener callbackListener) {
-			this.restURI = restURI;
-			this.callbackListener = callbackListener;
+		String getRestResponse(String restUrl) throws IOException {
+			HttpClient client = new DefaultHttpClient();
+			HttpGet get = new HttpGet(restUrl);
+			HttpResponse response = client.execute(get);
+
+			InputStream input = new BufferedInputStream(response.getEntity().getContent());
+			return readAllFromStream(input);
 		}
 
-		// triggered by publishProgress(Integer)
-		@Override
-		protected void onProgressUpdate(Integer... progress) {
-			super.onProgressUpdate(progress);
-		}
+		/**
+		 * @param restUrl the URL of the REST call
+		 * @param username the username to put in the basic authentication string
+		 * @param password the password to put in the basic authentication string
+		 * @return the response data as a String
+		 * @throws IOException
+		 */
+		String getRestResponse(String restUrl, String username, String password) throws IOException, AuthenticationException {
+			HttpClient client = new DefaultHttpClient();
+			HttpGet get = new HttpGet(restUrl);
 
-		@Override
-		protected String doInBackground(Void... nothing) {
-			HttpClient httpClient = new DefaultHttpClient();
-			HttpGet httpGet = null;
-			httpGet = new HttpGet(this.restURI);
+			UsernamePasswordCredentials creds = new UsernamePasswordCredentials(username, password);
+			get.addHeader(new BasicScheme().authenticate(creds, get));
 
-			HttpResponse response;
-			try {
-				response = httpClient.execute(httpGet);
-				HttpEntity entity = response.getEntity();
+			// make the request
+			HttpResponse response = client.execute(get);
 
-				InputStream input = new BufferedInputStream(entity.getContent());
-
-				StringBuilder sb = new StringBuilder();
-				int ch;
-				while ((ch = input.read()) != -1 && !this.isCancelled()) {
-					sb.append((char)ch);
-				}
-				return sb.toString();
-			} catch (Exception e) {
-				callbackListener.onException(e);
-				return null;
-			}
-		}
-
-		@Override
-		protected void onPostExecute(String result) {
-			Log.v(logTag + ".onPostExecute", " results:\n" + result);
-			Log.v(logTag + ".onPostExecute", result);
-			callbackListener.onRESTResponse(result);
+			// read all the data and return it
+			return readAllFromStream(new BufferedInputStream(response.getEntity().getContent()));
 		}
 	}
 }
