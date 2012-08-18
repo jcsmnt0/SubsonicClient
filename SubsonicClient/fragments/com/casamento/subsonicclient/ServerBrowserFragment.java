@@ -54,17 +54,13 @@ import static com.casamento.subsonicclient.SubsonicCaller.*;
 // TODO: use xml for layout
 public class ServerBrowserFragment extends SherlockListFragment {
 	private static final String logTag = "ServerBrowserFragment";
-	private List<MediaFolder> mMediaFolders;
-	private MediaFolder mCurrentMediaFolder;
-	private FilesystemEntry.Folder mCurrentFolder;
-	private Stack<Integer> mSavedScrollPositions;
 	private ListView mListView;
-	private SimpleCursorAdapter mAdapter;
+	private Cursor mCursor;
 
 	private ActivityCallbackInterface mActivity;
 
 	// containing Activity must implement this interface; enforced in onAttach
-	protected interface ActivityCallbackInterface {
+	interface ActivityCallbackInterface {
 		void initiateDownload(DownloadTask downloadTask);
 		void showDialogFragment(DialogFragment dialogFragment);
 		void connectToServer() throws SubsonicClientActivity.ServerNotSetUpException;
@@ -72,6 +68,11 @@ public class ServerBrowserFragment extends SherlockListFragment {
 		RetrieveCursorTask getRetrieveCursorTask(FilesystemEntry.Folder folder, OnCursorRetrievedListener callbackListener) throws SubsonicClientActivity.ServerNotSetUpException;
 		void showProgressSpinner();
 		void hideProgressSpinner();
+		void pushServerBrowserFragment(FilesystemEntry.Folder folder);
+	}
+
+	ServerBrowserFragment(Cursor cursor) {
+		mCursor = cursor;
 	}
 
 	@Override
@@ -81,15 +82,17 @@ public class ServerBrowserFragment extends SherlockListFragment {
 		// ensure activity implements the interface this Fragment needs
 		try {
 			mActivity = (ActivityCallbackInterface)activity;
+			setListAdapter(new FilesystemEntryCursorAdapter(getSherlockActivity(), mCursor, false));
 		} catch (ClassCastException e) {
-			throw new ClassCastException(mActivity.toString() +
-					" must implement ServerBrowserFragment.ActivityCallbackInterface");
+			throw new ClassCastException(mActivity.toString() + " must implement " +
+					"ServerBrowserFragment.ActivityCallbackInterface");
 		}
 	}
 
 	// TODO: free references for GC to claim
 	@Override
 	public void onDetach() {
+		super.onDetach();
 	}
 
 	// TODO: save list state
@@ -105,50 +108,11 @@ public class ServerBrowserFragment extends SherlockListFragment {
 		Log.d(logTag, "RESUME");
 	}
 
-	private void clearList() {
-		mListView.setAdapter(null);
-		mMediaFolders = null;
-		mCurrentMediaFolder = null;
-		mCurrentFolder = null;
-		setEmptyText("");
-	}
-
 	@Override
 	public void onActivityCreated(Bundle savedInstanceState) {
 		super.onActivityCreated(savedInstanceState);
 
 		setHasOptionsMenu(true);
-
-		mActivity.showProgressSpinner();
-		try {
-			RetrieveCursorTask task = mActivity.getRetrieveCursorTask(new OnCursorRetrievedListener() {
-				@Override
-				public void onCursorRetrieved(Cursor cursor) {
-					if (cursor == null || cursor.getCount() < 0)
-						mActivity.showDialogFragment(new AlertDialogFragment.Builder(getSherlockActivity())
-								.setTitle(R.string.error)
-								.setMessage("Something bad happened when getting the data.")
-								.setNeutralButton(R.string.ok)
-								.create());
-					else
-						setListAdapter(new FilesystemEntryCursorAdapter(getSherlockActivity(), cursor, false));
-				}
-
-				@Override
-				public void onException(Exception e) {
-					e.printStackTrace();
-					mActivity.showDialogFragment(new AlertDialogFragment.Builder(getSherlockActivity())
-							.setTitle(R.string.error)
-							.setMessage(e.getLocalizedMessage())
-							.setNeutralButton(R.string.ok)
-							.create());
-				}
-			});
-			task.execute();
-		} catch (Exception e) {
-			e.printStackTrace();
-			Log.e(logTag, e.getLocalizedMessage());
-		}
 
 		mListView = getListView();
 		mListView.setOnItemClickListener(filesystemEntryClickListener);
@@ -456,22 +420,23 @@ public class ServerBrowserFragment extends SherlockListFragment {
 //	}
 
 	private void setCurrentFolder(final FilesystemEntry.Folder folder) throws SubsonicClientActivity.ServerNotSetUpException {
-		mActivity.showProgressSpinner();
-		RetrieveCursorTask task = mActivity.getRetrieveCursorTask(folder, new OnCursorRetrievedListener() {
-			@Override
-			public void onCursorRetrieved(Cursor cursor) {
-				setListAdapter(new FilesystemEntryCursorAdapter(getSherlockActivity(), cursor, false));
-				mActivity.hideProgressSpinner();
-			}
-
-			@Override
-			public void onException(Exception e) {
-				mActivity.showDialogFragment(new AlertDialogFragment(getSherlockActivity(), R.string.error,
-						e.getLocalizedMessage()));
-				mActivity.hideProgressSpinner();
-			}
-		});
-		task.execute();
+		mActivity.pushServerBrowserFragment(folder);
+//		mActivity.showProgressSpinner();
+//		RetrieveCursorTask task = mActivity.getRetrieveCursorTask(folder, new OnCursorRetrievedListener() {
+//			@Override
+//			public void onCursorRetrieved(Cursor cursor) {
+//				setListAdapter(new FilesystemEntryCursorAdapter(getSherlockActivity(), cursor, false));
+//				mActivity.hideProgressSpinner();
+//			}
+//
+//			@Override
+//			public void onException(Exception e) {
+//				mActivity.showDialogFragment(new AlertDialogFragment(getSherlockActivity(), R.string.error,
+//						e.getLocalizedMessage()));
+//				mActivity.hideProgressSpinner();
+//			}
+//		});
+//		task.execute();
 	}
 
 	private static class FilesystemEntryCursorAdapter extends CursorAdapter {
