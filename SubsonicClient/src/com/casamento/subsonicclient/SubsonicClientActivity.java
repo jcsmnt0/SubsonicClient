@@ -33,6 +33,7 @@ import android.preference.PreferenceManager;
 import android.support.v4.app.DialogFragment;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentTransaction;
+import android.text.TextUtils;
 import android.util.Log;
 import com.actionbarsherlock.app.ActionBar;
 import com.actionbarsherlock.app.SherlockFragmentActivity;
@@ -74,7 +75,7 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 
 		setContentView(R.layout.main);
 
-		ActionBar actionBar = getSupportActionBar();
+		final ActionBar actionBar = getSupportActionBar();
 		actionBar.setNavigationMode(ActionBar.NAVIGATION_MODE_TABS);
 
 		class OnTabActionListener implements ActionBar.TabListener {
@@ -102,38 +103,23 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 		}
 
 		final ActionBar.Tab serverBrowserTab = actionBar.newTab().setText("Server");
-		serverBrowserTab.setTabListener(new ActionBar.TabListener() {
-			@Override
-			public void onTabSelected(ActionBar.Tab tab, FragmentTransaction ft) {
-				//To change body of implemented methods use File | Settings | File Templates.
-			}
-
-			@Override
-			public void onTabUnselected(ActionBar.Tab tab, FragmentTransaction ft) {
-				//To change body of implemented methods use File | Settings | File Templates.
-			}
-
-			@Override
-			public void onTabReselected(ActionBar.Tab tab, FragmentTransaction ft) {
-				//To change body of implemented methods use File | Settings | File Templates.
-			}
-		});
-		actionBar.addTab(serverBrowserTab);
 
 		showProgressSpinner();
 		try {
 			RetrieveCursorTask task = getRetrieveCursorTask(new OnCursorRetrievedListener() {
 				@Override
 				public void onCursorRetrieved(Cursor cursor) {
-					if (cursor == null || cursor.getCount() < 0)
+					if (cursor != null && cursor.getCount() >= 0) {
+						mServerBrowserFragment = new ServerBrowserFragment(cursor);
+						serverBrowserTab.setTabListener(new OnTabActionListener(mServerBrowserFragment));
+						actionBar.addTab(serverBrowserTab, 0);
+						actionBar.selectTab(serverBrowserTab);
+					} else {
 						showDialogFragment(new AlertDialogFragment.Builder(getApplicationContext())
 								.setTitle(R.string.error)
 								.setMessage("Something bad happened when getting the data.")
 								.setNeutralButton(R.string.ok)
 								.create());
-					else {
-						mServerBrowserFragment = new ServerBrowserFragment(cursor);
-						serverBrowserTab.setTabListener(new OnTabActionListener(mServerBrowserFragment));
 					}
 
 					hideProgressSpinner();
@@ -203,9 +189,9 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
 
 		String serverUrl, username, password;
-		if ((serverUrl = prefs.getString("serverUrl", "")).equals("") ||
-				(username = prefs.getString("username", "")).equals("") ||
-				(password = prefs.getString("password", "")).equals(""))
+		if (TextUtils.isEmpty(serverUrl = prefs.getString("serverUrl", "")) ||
+				TextUtils.isEmpty(username = prefs.getString("username", "")) ||
+				TextUtils.isEmpty(password = prefs.getString("password", "")))
 			throw new ServerNotSetUpException("The server has not been fully set up.");
 
 		setServerDetails(serverUrl, username, password, this);

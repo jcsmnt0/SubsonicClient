@@ -30,6 +30,7 @@ import android.content.Context;
 import android.database.Cursor;
 import android.os.Bundle;
 import android.support.v4.app.DialogFragment;
+import android.support.v4.app.FragmentTransaction;
 import android.support.v4.widget.CursorAdapter;
 import android.support.v4.widget.SimpleCursorAdapter;
 import android.util.Log;
@@ -38,12 +39,11 @@ import android.view.ContextMenu.ContextMenuInfo;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AdapterView;
+import android.widget.*;
 import android.widget.AdapterView.AdapterContextMenuInfo;
-import android.widget.ListView;
-import android.widget.TextView;
 import com.actionbarsherlock.app.SherlockListFragment;
 import com.actionbarsherlock.view.Menu;
+import com.actionbarsherlock.view.MenuItem;
 
 import java.util.List;
 import java.util.Stack;
@@ -210,241 +210,39 @@ public class ServerBrowserFragment extends SherlockListFragment {
 
 	@Override
 	public void onPrepareOptionsMenu(final Menu menu) {
-		// TODO: if this check isn't here the menu items get added every time the menu is shown, find out why
-		if (menu.findItem(R.id.option_selectMediaFolder) == null)
-			getSherlockActivity().getSupportMenuInflater().inflate(R.menu.optionsmenu_server_browser, menu);
 	}
 
-//	@Override
-//	public boolean onOptionsItemSelected(final MenuItem item) {
-//		switch (item.getItemId()) {
-//			case android.R.id.home:
-//				if (mCurrentFolder != null) {
-//					try {
-////						if (mCurrentFolder.parent != null) {
-////							setCurrentFolder(mCurrentFolder.parent);
-////						} else {
-////							setCurrentMediaFolder(mCurrentMediaFolder);
-////						}
-//						mListView.setSelectionFromTop(mSavedScrollPositions.pop(), 0);
-//					} catch (SubsonicClientActivity.ServerNotSetUpException e) {
-//						AlertDialogFragment alert = new AlertDialogFragment.Builder(getSherlockActivity())
-//							.setTitle(R.string.error)
-//							.setMessage("Please set up your server in the settings.")
-//							.setNeutralButton(R.string.ok)
-//							.create();
-//						mActivity.showDialogFragment(alert);
-//					}
-//				}
-//				return true;
-//
-//			case R.id.option_selectMediaFolder:
-////				showSelectMediaFolderDialog();
-//				return true;
-//
-//			default:
-//				return super.onOptionsItemSelected(item);
-//
-//		}
-//	}
+	@Override
+	public boolean onOptionsItemSelected(final MenuItem item) {
+		switch (item.getItemId()) {
+			case android.R.id.home:
+				// TODO: make the home button go up one folder
+				return true;
 
-//	private void downloadFolder(final Folder folder, final boolean transcoded) {
-//		// get folder contents list from the server if needed
-//		if (folder.contents == null) {
-//			try {
-//				SubsonicCaller.listFolderContents(folder, new SubsonicCaller.OnFolderContentsResponseListener() {
-//					@Override
-//					public void onFolderContentsResponse(List<FilesystemEntry> contents) {
-//						// try download again
-//						folder.contents = contents;
-//						downloadFolder(folder, transcoded);
-//					}
-//
-//					@Override
-//					public void onException(Exception e) {
-//						mActivity.showDialogFragment(new AlertDialogFragment(getSherlockActivity(),
-//								R.string.error, e.getLocalizedMessage()));
-//						Log.e(logTag, e.toString());
-//					}
-//				});
-//			} catch (Exception e) {
-//				mActivity.showDialogFragment(new AlertDialogFragment(getSherlockActivity(),
-//						R.string.error, e.getLocalizedMessage()));
-//				Log.e(logTag, e.toString());
-//			}
-//			return;
-//		}
-//
-//		for (FilesystemEntry entry : folder.contents) {
-//			if (entry.isFolder)
-//				downloadFolder((Folder)entry, transcoded);
-//			else {
-//				if (transcoded) {
-//					try {
-//						mActivity.initiateDownload(SubsonicCaller.getTranscodedDownloadTask((MediaFile)entry,
-//								0, null, 0, null, false));
-//					} catch (Exception e) {
-//						mActivity.showDialogFragment(new AlertDialogFragment(getSherlockActivity(), getString(R.string.error), e.getLocalizedMessage()));
-//						Log.e(logTag, e.toString());
-//					}
-//				} else {
-//					try {
-//						mActivity.initiateDownload(SubsonicCaller.getOriginalDownloadTask((MediaFile)entry));
-//					} catch (Exception e) {
-//						mActivity.showDialogFragment(new AlertDialogFragment(getSherlockActivity(), getString(R.string.error), e.getLocalizedMessage()));
-//						Log.e(logTag, e.toString());
-//					}
-//				}
-//			}
-//		}
-//	}
-
-//	private void showSelectMediaFolderDialog() {
-//		if (mMediaFolders == null || mMediaFolders.size() == 0) {
-//			mActivity.showDialogFragment(new AlertDialogFragment(getSherlockActivity(), getString(R.string.error), "There's nothing here!"));
-//			return;
-//		}
-//
-//		// populate list of media folders
-//		final List<String> entryList = new ArrayList<String>();
-////		entryList.add("Everything");
-//
-//		for (MediaFolder mediaFolder : mMediaFolders) {
-//			entryList.add(mediaFolder.name);
-//		}
-//		final String[] entryArray = new String[entryList.size()];
-//		entryList.toArray(entryArray);
-//
-//		final int currentEntry = mMediaFolders.indexOf(mCurrentMediaFolder);
-//
-//		final RadioDialogFragment dialog = new RadioDialogFragment("Select media folder:", entryArray, currentEntry, new RadioDialogFragment.OnSelectionListener() {
-//			@Override
-//			public void onSelection(final int selection) {
-////				if (selection == 0)
-////					setCurrentMediaFolder(null);
-////				else
-////					setCurrentMediaFolder(mMediaFolders.get(selection - 1));
-//				try {
-//					setCurrentMediaFolder(mMediaFolders.get(selection));
-//				} catch (SubsonicClientActivity.ServerNotSetUpException e) {
-//					AlertDialogFragment alert = new AlertDialogFragment.Builder(getSherlockActivity())
-//						.setTitle(R.string.error)
-//						.setMessage("Please set up your server in the settings.")
-//						.setNeutralButton(R.string.ok)
-//						.create();
-//					mActivity.showDialogFragment(alert);
-//				}
-//			}
-//		});
-//
-//		mActivity.showDialogFragment(dialog);
-//	}
-
-//	// TODO: push new fragment instead (so OS handles back button)
-//	private void setCurrentMediaFolder(final MediaFolder mediaFolder) {
-//		mCurrentMediaFolder = mediaFolder;
-//		mCurrentFolder = null;
-//
-//		getSherlockActivity().getSupportActionBar().setDisplayHomeAsUpEnabled(false);
-//
-//		if (mCurrentMediaFolder == null || mCurrentMediaFolder.contents == null) {
-//			final ServerBrowserFragment self = this;
-//			try {
-//				final LoadingDialogFragment dialog = new LoadingDialogFragment("Loading folder contents...");
-//				mActivity.showDialogFragment(dialog);
-//				SubsonicCaller.listMediaFolderContents(mCurrentMediaFolder, null, new SubsonicCaller.OnMediaFolderContentsResponseListener() {
-//					@Override
-//					public void onMediaFolderContentsResponse(List<FilesystemEntry> contents) {
-////						if (self.currentMediaFolder == null)
-////							self.currentMediaFolder = new MediaFolder("Everything");
-////						self.currentMediaFolder.contents = contents;
-////						self.showFolderContents(self.currentMediaFolder);
-////						self.getSherlockActivity().setTitle(self.currentMediaFolder.name);
-////						dialog.dismiss();
-//
-//					}
-//
-//					@Override
-//					public void onException(Exception e) {
-//						mActivity.showDialogFragment(new AlertDialogFragment(self.getSherlockActivity(), self.getString(R.string.error), e.getLocalizedMessage()));
-//						dialog.dismiss();
-//					}
-//				});
-//			} catch (Exception e) {
-//				mActivity.showDialogFragment(new AlertDialogFragment(getSherlockActivity(), getString(R.string.error), e.getLocalizedMessage()));
-//			}
-//		} else {
-//			showFolderContents(mCurrentMediaFolder);
-//			getSherlockActivity().setTitle(mediaFolder.name);
-//		}
-//	}
+			default:
+				return super.onOptionsItemSelected(item);
+		}
+	}
 
 	private OnItemClickListener filesystemEntryClickListener = new OnItemClickListener() {
 		@Override
 		public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
 			FilesystemEntry entry = SubsonicCaller.getFilesystemEntry((Integer) view.getTag());
 			if (entry.isFolder)
-				try {
-					setCurrentFolder((FilesystemEntry.Folder)entry);
-				} catch (SubsonicClientActivity.ServerNotSetUpException e) {
-					AlertDialogFragment alert = new AlertDialogFragment.Builder(getSherlockActivity())
-						.setTitle(R.string.error)
-						.setMessage("Please set up your server in the settings.")
-						.setNeutralButton(R.string.ok)
-						.create();
-					mActivity.showDialogFragment(alert);
-				}
+				mActivity.pushServerBrowserFragment((FilesystemEntry.Folder) entry);
 		}
 	};
-//
-//	private void setCurrentMediaFolder(final MediaFolder mediaFolder) throws SubsonicClientActivity.ServerNotSetUpException {
-//		final LoadingDialogFragment loading = new LoadingDialogFragment("Loading media folder contents...");
-//		loading.setCancelable(false);
-//		mActivity.showDialogFragment(loading);
-//
-//		RetrieveCursorTask task = mActivity.getRetrieveCursorTask(mediaFolder, new OnCursorRetrievedListener() {
-//			@Override
-//			public void onCursorRetrieved(Cursor cursor) {
-//				setListAdapter(new FilesystemEntryCursorAdapter(getSherlockActivity(), cursor, false));
-//				loading.dismiss();
-//			}
-//
-//			@Override
-//			public void onException(Exception e) {
-//				loading.dismiss();
-//				mActivity.showDialogFragment(new AlertDialogFragment(getSherlockActivity(), R.string.error,
-//						e.getLocalizedMessage()));
-//			}
-//		});
-//		task.execute();
-//	}
 
-	private void setCurrentFolder(final FilesystemEntry.Folder folder) throws SubsonicClientActivity.ServerNotSetUpException {
-		mActivity.pushServerBrowserFragment(folder);
-//		mActivity.showProgressSpinner();
-//		RetrieveCursorTask task = mActivity.getRetrieveCursorTask(folder, new OnCursorRetrievedListener() {
-//			@Override
-//			public void onCursorRetrieved(Cursor cursor) {
-//				setListAdapter(new FilesystemEntryCursorAdapter(getSherlockActivity(), cursor, false));
-//				mActivity.hideProgressSpinner();
-//			}
-//
-//			@Override
-//			public void onException(Exception e) {
-//				mActivity.showDialogFragment(new AlertDialogFragment(getSherlockActivity(), R.string.error,
-//						e.getLocalizedMessage()));
-//				mActivity.hideProgressSpinner();
-//			}
-//		});
-//		task.execute();
-	}
-
-	private static class FilesystemEntryCursorAdapter extends CursorAdapter {
+	private static class FilesystemEntryCursorAdapter extends CursorAdapter implements SectionIndexer {
 		private final LayoutInflater inflater;
 		private final int idCol, nameCol;
+		private final AlphabetIndexer indexer;
 
 		public FilesystemEntryCursorAdapter(Context context, Cursor c, boolean autoRequery) {
 			super(context, c, autoRequery);
+
+			indexer = new AlphabetIndexer(c, c.getColumnIndex(DatabaseHelper.NAME.name), "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+
 			inflater = LayoutInflater.from(context);
 			idCol = c.getColumnIndex(DatabaseHelper.ID.name);
 			nameCol = c.getColumnIndex(DatabaseHelper.NAME.name);
@@ -462,70 +260,20 @@ public class ServerBrowserFragment extends SherlockListFragment {
 			// set the subsonic ID as the view's tag
 			view.setTag(cursor.getInt(idCol));
 		}
+
+		@Override
+		public int getPositionForSection(int section) {
+			return indexer.getPositionForSection(section);
+		}
+
+		@Override
+		public int getSectionForPosition(int section) {
+			return indexer.getSectionForPosition(section);
+		}
+
+		@Override
+		public Object[] getSections() {
+			return indexer.getSections();
+		}
 	}
-
-	// TODO: push new fragment instead (so OS handles back button)
-//	private void setCurrentFolder(final Folder folder) {
-//		mCurrentFolder = folder;
-//
-//		if (mCurrentFolder.contents == null) {
-//			final ServerBrowserFragment self = this;
-//			try {
-//				SubsonicCaller.listFolderContents(folder, new SubsonicCaller.OnFolderContentsResponseListener() {
-//					@Override
-//					public void onFolderContentsResponse(List<FilesystemEntry> contents) {
-//						self.currentFolder.contents = contents;
-//						self.showFolderContents(self.currentFolder);
-//						self.getSherlockActivity().setTitle(self.currentFolder.name);
-//						self.getSherlockActivity().getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-//					}
-//
-//					@Override
-//					public void onException(Exception e) {
-//						try {
-//							throw e;
-//						} catch (Exception e1) {
-//							mActivity.showDialogFragment(new AlertDialogFragment(self.getSherlockActivity(), self.getString(R.string.error), e.getLocalizedMessage()));
-//						}
-//					}
-//				});
-//			} catch (Exception e) {
-//				mActivity.showDialogFragment(new AlertDialogFragment(getSherlockActivity(), getString(R.string.error), e.getLocalizedMessage()));
-//			}
-//		} else {
-//			showFolderContents(mCurrentFolder);
-//			getSherlockActivity().setTitle(folder.name);
-//			getSherlockActivity().getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-//		}
-//	}
-
-
-
-	// TODO: push new fragment instead (so OS handles back button)
-//	private void showFolderContents(final Folder folder) {
-//		setListAdapter(new FilesystemEntryArrayAdapter(getSherlockActivity(), folder.contents));
-//
-//		mListView.setOnItemClickListener(new OnItemClickListener() {
-//			public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-//
-//				FilesystemEntry clickedEntry = folder.contents.get(position);
-//
-//				if (clickedEntry.isFolder) {
-//					mSavedScrollPositions.push(mListView.getFirstVisiblePosition());
-//					Folder clickedFolder = (Folder)clickedEntry;
-//					setCurrentFolder(clickedFolder);
-//				} else {
-//					try {
-//						SubsonicCaller.stream((MediaFile)clickedEntry, 0, null, 0, null, true);
-//					} catch (Exception e) {
-//						mActivity.showDialogFragment(new AlertDialogFragment(getSherlockActivity(),
-//								getString(R.string.error), e.getLocalizedMessage()));
-//						Log.e(logTag, e.toString());
-//					}
-//				}
-//			}
-//		});
-//
-//		// TODO: maybe scroll (marquee) text on swipe/some other action via view.setSelected(true)
-//	}
 }
