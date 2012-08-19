@@ -18,10 +18,10 @@ import java.io.UnsupportedEncodingException;
 import java.net.*;
 import java.util.Map;
 
-class RESTCaller {
-	private static final String logTag = "RESTCaller";
+class RestCaller {
+	private static final String logTag = "RestCaller";
 
-	protected static URI buildRestCallUri(String restUrl, String method, Map<String, String> params) throws MalformedURLException, UnsupportedEncodingException, URISyntaxException {
+	protected static String buildRestCall(String restUrl, String method, Map<String, String> params) throws MalformedURLException, UnsupportedEncodingException, URISyntaxException {
 		String urlStr = "";
 
 		// assume http if no protocol given
@@ -45,7 +45,7 @@ class RESTCaller {
 		}
 
 		Log.d(logTag, "calling " + urlStr);
-		return new URI(urlStr);
+		return urlStr;
 	}
 
 	static abstract class RestCallTask<Params, Progress, Result> extends AsyncTask<Params, Progress, Result> {
@@ -65,6 +65,7 @@ class RESTCaller {
 					responseData += new String(buffer, 0, bytesRead);
 			}
 
+			Log.w(logTag, "response: " + responseData);
 			return responseData;
 		}
 

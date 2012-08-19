@@ -79,5 +79,10 @@
 	<string name="download_original">Download Original</string>
 	<string name="download_transcoded">Download Transcoded</string>
 	<string name="server_connection_problem">There was a problem connecting to the server.</string>
+    <string name="download_service_notification_text">SubsonicClient download service</string>
+    <string name="download_service_ticker">SubsonicClient download started</string>
+    <string name="download_service_content_title">SubsonicClient</string>
+    <string name="download_service_content_text">Downloading files</string>
+    <string name="download_service">Download service started</string>
 
 </resources>

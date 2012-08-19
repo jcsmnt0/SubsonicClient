@@ -1,4 +1,4 @@
-package com.casamento.subsonicclient;/*
+/*
  * Copyright (c) 2012, Joseph Casamento
  * All rights reserved.
  *
@@ -22,6 +22,8 @@ package com.casamento.subsonicclient;/*
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
+package com.casamento.subsonicclient;
 
 import android.app.Activity;
 import android.content.Context;
@@ -130,11 +132,7 @@ public class DownloadManagerFragment extends SherlockListFragment {
 				holder = (ViewHolder)convertView.getTag();
 			}
 
-			holder.name.setText(downloadTask.getName());
-			holder.path.setText(downloadTask.getSavePath());
-
-			downloadTask.setProgressView(holder.progressView);
-	//		downloadTask.attachProgressBar(progressBar);
+			holder.path.setText(downloadTask.savePath);
 
 			return convertView;
 		}

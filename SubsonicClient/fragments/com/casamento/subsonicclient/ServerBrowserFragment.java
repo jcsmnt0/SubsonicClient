@@ -29,6 +29,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.database.Cursor;
 import android.os.Bundle;
+import android.os.Environment;
 import android.support.v4.app.DialogFragment;
 import android.support.v4.app.FragmentTransaction;
 import android.support.v4.widget.CursorAdapter;
@@ -45,6 +46,9 @@ import com.actionbarsherlock.app.SherlockListFragment;
 import com.actionbarsherlock.view.Menu;
 import com.actionbarsherlock.view.MenuItem;
 
+import java.io.UnsupportedEncodingException;
+import java.net.MalformedURLException;
+import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Stack;
 
@@ -61,14 +65,8 @@ public class ServerBrowserFragment extends SherlockListFragment {
 
 	// containing Activity must implement this interface; enforced in onAttach
 	interface ActivityCallbackInterface {
-		void initiateDownload(DownloadTask downloadTask);
-		void showDialogFragment(DialogFragment dialogFragment);
-		void connectToServer() throws SubsonicClientActivity.ServerNotSetUpException;
-		RetrieveCursorTask getRetrieveCursorTask(OnCursorRetrievedListener callbackListener) throws SubsonicClientActivity.ServerNotSetUpException;
-		RetrieveCursorTask getRetrieveCursorTask(FilesystemEntry.Folder folder, OnCursorRetrievedListener callbackListener) throws SubsonicClientActivity.ServerNotSetUpException;
-		void showProgressSpinner();
-		void hideProgressSpinner();
 		void pushServerBrowserFragment(FilesystemEntry.Folder folder);
+		void initiateDownload(FilesystemEntry.MediaFile mediaFile, boolean transcoded);
 	}
 
 	ServerBrowserFragment(Cursor cursor) {
@@ -87,25 +85,6 @@ public class ServerBrowserFragment extends SherlockListFragment {
 			throw new ClassCastException(mActivity.toString() + " must implement " +
 					"ServerBrowserFragment.ActivityCallbackInterface");
 		}
-	}
-
-	// TODO: free references for GC to claim
-	@Override
-	public void onDetach() {
-		super.onDetach();
-	}
-
-	// TODO: save list state
-	@Override
-	public void onPause() {
-		super.onPause();
-		Log.d(logTag, "PAUSE");
-	}
-
-	@Override
-	public void onResume() {
-		super.onResume();
-		Log.d(logTag, "RESUME");
 	}
 
 	@Override
@@ -134,7 +113,7 @@ public class ServerBrowserFragment extends SherlockListFragment {
 		super.onCreateContextMenu(menu, v, menuInfo);
 
 		AdapterContextMenuInfo info = (AdapterContextMenuInfo)menuInfo;
-		FilesystemEntry entry = (FilesystemEntry)getListAdapter().getItem(info.position);
+		FilesystemEntry entry = FilesystemEntry.getInstance((Cursor) getListAdapter().getItem(info.position));
 
 		menu.setHeaderTitle(entry.name);
 
@@ -153,7 +132,7 @@ public class ServerBrowserFragment extends SherlockListFragment {
 	@Override
 	public boolean onContextItemSelected(android.view.MenuItem item) {
 		AdapterContextMenuInfo info = (AdapterContextMenuInfo)item.getMenuInfo();
-		FilesystemEntry entry = (FilesystemEntry)mListView.getAdapter().getItem(info.position);
+		FilesystemEntry entry = FilesystemEntry.getInstance((Cursor) mListView.getAdapter().getItem(info.position));
 
 		if (entry.isFolder) {
 			FilesystemEntry.Folder folder = (FilesystemEntry.Folder)entry;
@@ -173,34 +152,29 @@ public class ServerBrowserFragment extends SherlockListFragment {
 			switch(item.getItemId()) {
 				case R.id.fileContextMenu_downloadOriginalFile:
 					try {
-						mActivity.initiateDownload(SubsonicCaller.getOriginalDownloadTask(mediaFile));
+						mActivity.initiateDownload(mediaFile, false);
 					} catch (Exception e) {
 						// TODO: better exception handling
-						mActivity.showDialogFragment(new AlertDialogFragment(getSherlockActivity(),
-								getString(R.string.error), e.getLocalizedMessage()));
 						Log.e(logTag, e.toString());
 					}
 					break;
 
 				case R.id.fileContextMenu_downloadTranscodedFile:
 					try {
-						mActivity.initiateDownload(SubsonicCaller.getTranscodedDownloadTask(mediaFile, 0,
-								null, 0, null, false));
+						mActivity.initiateDownload(mediaFile, true);
 					} catch (Exception e) {
-						mActivity.showDialogFragment(new AlertDialogFragment(getSherlockActivity(),
-								getString(R.string.error), e.getLocalizedMessage()));
 						Log.e(logTag, e.toString());
 					}
 					break;
 
 				case R.id.fileContextMenu_streamFile:
-					try {
-						SubsonicCaller.stream(mediaFile, 0, null, 0, null, false);
-					} catch (Exception e) {
-						mActivity.showDialogFragment(new AlertDialogFragment(getSherlockActivity(),
-								getString(R.string.error), e.getLocalizedMessage()));
-						Log.e(logTag, e.toString());
-					}
+//					try {
+//						SubsonicCaller.stream(mediaFile, 0, null, 0, null, false);
+//					} catch (Exception e) {
+//						mActivity.showDialogFragment(new AlertDialogFragment(getSherlockActivity(),
+//								getString(R.string.error), e.getLocalizedMessage()));
+//						Log.e(logTag, e.toString());
+//					}
 					break;
 			}
 		}

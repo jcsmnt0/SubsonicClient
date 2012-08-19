@@ -25,10 +25,9 @@
 
 package com.casamento.subsonicclient;
 
-import android.content.Intent;
-import android.content.SharedPreferences;
+import android.content.*;
 import android.database.Cursor;
-import android.os.Bundle;
+import android.os.*;
 import android.preference.PreferenceManager;
 import android.support.v4.app.DialogFragment;
 import android.support.v4.app.Fragment;
@@ -39,6 +38,9 @@ import com.actionbarsherlock.app.ActionBar;
 import com.actionbarsherlock.app.SherlockFragmentActivity;
 import com.actionbarsherlock.view.Window;
 
+import java.io.UnsupportedEncodingException;
+import java.net.MalformedURLException;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -49,6 +51,70 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 
 	protected static final String logTag = "SubsonicClientActivity";
 
+	private Messenger mDownloadService = null;
+	private boolean mDownloadServiceBound;
+
+	final Messenger mDownloadMessenger = new Messenger(new Handler() {
+		@Override
+		public void handleMessage(Message msg) {
+			switch(DownloadService.Messages.values()[msg.what]) {
+				default:
+					super.handleMessage(msg);
+			}
+		}
+	});
+
+	private ServiceConnection mDownloadConnection = new ServiceConnection() {
+		@Override
+		public void onServiceConnected(ComponentName className, IBinder service) {
+			mDownloadService = new Messenger(service);
+
+			try {
+				Message msg = Message.obtain(null, DownloadService.Messages.REGISTER_CLIENT.ordinal());
+				msg.replyTo = mDownloadMessenger;
+				mDownloadService.send(msg);
+			} catch (RemoteException e) {
+				// Service has crashed and will be automatically reconnected, so no action is necessary here
+			}
+		}
+
+		@Override
+		public void onServiceDisconnected(ComponentName componentName) {
+			// The service's process has crashed
+			mDownloadService = null;
+		}
+	};
+
+	void bindDownloadService() {
+		bindService(new Intent(this, DownloadService.class), mDownloadConnection,
+				Context.BIND_AUTO_CREATE | Context.BIND_ABOVE_CLIENT);
+
+		mDownloadServiceBound = true;
+	}
+
+	void unbindDownloadService() {
+		if (mDownloadServiceBound) {
+			if (mDownloadService != null) {
+				try {
+					Message msg = Message.obtain(null, DownloadService.Messages.UNREGISTER_CLIENT.ordinal());
+					msg.replyTo = mDownloadMessenger;
+					mDownloadService.send(msg);
+				} catch (RemoteException e) {
+					// No need to do anything if the service has crashed before unbinding
+				}
+			}
+
+			unbindService(mDownloadConnection);
+			mDownloadServiceBound = false;
+		}
+	}
+
+	interface DownloadListener {
+		void onProgressUpdate(long progress);
+		void onDownloadStart(String url);
+		void onDownloadCompletion(String url);
+	}
+
 	static boolean serverConnected = false;
 
 	// for fragment management
@@ -58,12 +124,49 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 	// for DownloadManagerFragment
 	private List<DownloadTask> mDownloadTasks;
 
+	@Override
+	public void initiateDownload(FilesystemEntry.MediaFile mediaFile, boolean transcoded) {
+		if (mDownloadService != null) {
+			try {
+				Bundle msgData = new Bundle();
+
+				msgData.putString("url", SubsonicCaller.getDownloadUrl(mediaFile, transcoded));
+
+				String savePath = Environment.getExternalStorageDirectory().toString() +
+								"/SubsonicClient/" +
+								mediaFile.path.substring(0, mediaFile.path.lastIndexOf('.') + 1) +
+								(mediaFile.transcodedSuffix != null ? mediaFile.transcodedSuffix : mediaFile.suffix);
+				msgData.putString("savePath", savePath);
+
+				msgData.putString("username", SubsonicCaller.getUsername());
+				msgData.putString("password", SubsonicCaller.getPassword());
+
+				Message msg = Message.obtain(null, DownloadService.Messages.INITIATE_DOWNLOAD.ordinal());
+				msg.replyTo = mDownloadMessenger;
+				msg.setData(msgData);
+
+				mDownloadService.send(msg);
+			} catch (RemoteException e) {
+				// TODO: restart service and try again?
+			} catch (Throwable t) {
+				Log.e(logTag, "Error", t);
+			}
+		} else {
+			Log.e(logTag, "The download service has gone down!");
+		}
+	}
+
 	private void pushFragment(Fragment fragment) {
 		FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
 
 		transaction.replace(R.id.fragment_container, fragment);
 		transaction.addToBackStack(null);
 		transaction.commit();
+	}
+
+	@Override
+	protected void onDestroy() {
+		unbindDownloadService();
 	}
 
 	@Override
@@ -150,6 +253,8 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 
 		// for DownloadManagerFragment
 		mDownloadTasks = new ArrayList<DownloadTask>();
+
+		bindDownloadService();
 	}
 
 	@Override
@@ -171,21 +276,11 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 		}
 	}
 
-
-	// ServerBrowserInterface methods
-
-	@Override
-	public void initiateDownload(final DownloadTask downloadTask) {
-		mDownloadTasks.add(downloadTask);
-		downloadTask.execute();
-	}
-
 	class ServerNotSetUpException extends Exception {
 		ServerNotSetUpException(String message) { super(message); }
 	}
 
-	@Override
-	public void connectToServer() throws ServerNotSetUpException {
+	private void connectToServer() throws ServerNotSetUpException {
 		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
 
 		String serverUrl, username, password;
@@ -198,25 +293,21 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 		serverConnected = true;
 	}
 
-	@Override
-	public RetrieveCursorTask getRetrieveCursorTask(OnCursorRetrievedListener callbackListener) throws ServerNotSetUpException {
+	private RetrieveCursorTask getRetrieveCursorTask(OnCursorRetrievedListener callbackListener) throws ServerNotSetUpException {
 		if (!serverConnected) connectToServer();
 		return new RetrieveCursorTask(callbackListener);
 	}
 
-	@Override
-	public RetrieveCursorTask getRetrieveCursorTask(FilesystemEntry.Folder folder, OnCursorRetrievedListener callbackListener) throws ServerNotSetUpException {
+	private RetrieveCursorTask getRetrieveCursorTask(FilesystemEntry.Folder folder, OnCursorRetrievedListener callbackListener) throws ServerNotSetUpException {
 		if (!serverConnected) connectToServer();
 		return new RetrieveCursorTask(folder, callbackListener);
 	}
 
-	@Override
-	public void showDialogFragment(DialogFragment dialogFragment) {
+	private void showDialogFragment(DialogFragment dialogFragment) {
 		dialogFragment.show(getSupportFragmentManager(), "dialog");
 	}
 
-	@Override
-	public void showProgressSpinner() {
+	private void showProgressSpinner() {
 		runOnUiThread(new Runnable() {
 			@Override
 			public void run() {
@@ -225,8 +316,7 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 		});
 	}
 
-	@Override
-	public void hideProgressSpinner() {
+	private void hideProgressSpinner() {
 		runOnUiThread(new Runnable() {
 			@Override
 			public void run() {
@@ -235,12 +325,15 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 		});
 	}
 
+
+	// ServerBrowserInterface methods
+
 	@Override
 	public void pushServerBrowserFragment(FilesystemEntry.Folder folder) {
 		showProgressSpinner();
-		RetrieveCursorTask task = null;
+
 		try {
-			task = getRetrieveCursorTask(folder, new OnCursorRetrievedListener() {
+			getRetrieveCursorTask(folder, new OnCursorRetrievedListener() {
 				@Override
 				public void onCursorRetrieved(Cursor cursor) {
 					pushFragment(new ServerBrowserFragment(cursor));
@@ -253,13 +346,12 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 							e.getLocalizedMessage()));
 					hideProgressSpinner();
 				}
-			});
+			}).execute((Void) null);
 		} catch (ServerNotSetUpException e) {
 			showDialogFragment(new AlertDialogFragment(getApplicationContext(), R.string.error,
 					e.getLocalizedMessage()));
 			hideProgressSpinner();
 		}
-		task.execute();
 	}
 
 	// DownloadManagerInterface methods

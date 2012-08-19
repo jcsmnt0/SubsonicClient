@@ -28,42 +28,24 @@ package com.casamento.subsonicclient;
 import android.app.Activity;
 import android.content.ContentValues;
 import android.content.Context;
-import android.content.Intent;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
-import android.net.Uri;
-import android.os.AsyncTask;
-import android.os.Environment;
-import android.util.Base64;
 import android.util.Log;
-import org.apache.http.*;
-import org.apache.http.auth.AuthenticationException;
-import org.apache.http.auth.UsernamePasswordCredentials;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.auth.BasicScheme;
-import org.apache.http.impl.client.DefaultHttpClient;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.BufferedInputStream;
-import java.io.IOException;
-import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
-import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URLEncoder;
 import java.text.ParseException;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
 import static com.casamento.subsonicclient.SubsonicCaller.DatabaseHelper.*;
 
-class SubsonicCaller extends RESTCaller {
+class SubsonicCaller extends RestCaller {
 	private static final String API_VERSION = "1.4.0"; // 1.4.0+ required for JSON
 	private static final String CLIENT_ID = "Android Subsonic Client";
 	private static final String logTag = "SubsonicCaller";
@@ -71,6 +53,14 @@ class SubsonicCaller extends RESTCaller {
 	private static Map<String, String> mRequiredParams;
 	private static Activity mActivity;
 	private static DatabaseHelper mDatabaseHelper;
+
+	static String getUsername() {
+		return mUsername;
+	}
+
+	static String getPassword() {
+		return mPassword;
+	}
 
 	private static interface Methods {
 		// documentation is mostly taken from http://www.subsonic.org/pages/api.jsp
@@ -410,18 +400,17 @@ class SubsonicCaller extends RESTCaller {
 
 	static void setServerDetails(final String serverUrl, final String username, final String password,
 			final Activity activity) {
-		mServerUrl = serverUrl + "/rest/";
+		mServerUrl = serverUrl + "/rest";
 		mUsername = username;
 		mPassword = password;
 
 		mActivity = activity;
 		mDatabaseHelper = getInstance(mActivity);
 
-		mRequiredParams = new HashMap<String, String>() {{
-			put("v", SubsonicCaller.API_VERSION);
-			put("c", SubsonicCaller.CLIENT_ID);
-			put("f", "json"); // XML isn't supported, for now at least
-		}};
+		mRequiredParams = new HashMap<String, String>();
+		mRequiredParams.put("v", SubsonicCaller.API_VERSION);
+		mRequiredParams.put("c", SubsonicCaller.CLIENT_ID);
+		mRequiredParams.put("f", "json");
 	}
 
 	private static JSONObject parseSubsonicResponse(String responseStr) throws JSONException, SubsonicException {
@@ -437,8 +426,8 @@ class SubsonicCaller extends RESTCaller {
 	}
 
 	static void ping(final OnPingResponseListener callbackListener) throws UnsupportedEncodingException, MalformedURLException, URISyntaxException {
-		new RetrieveRestResponseTask(buildRestCallUri(mServerUrl, Methods.PING,
-				mRequiredParams).toString(), mUsername, mPassword, new OnRestResponseListener() {
+		new RetrieveRestResponseTask(buildRestCall(mServerUrl, Methods.PING, mRequiredParams), mUsername, mPassword,
+				new OnRestResponseListener() {
 			@Override
 			public void onRestResponse(String responseStr) {
 				boolean ok;
@@ -459,46 +448,6 @@ class SubsonicCaller extends RESTCaller {
 				callbackListener.onPingResponse(false);
 			}
 		}).execute((Void) null);
-	}
-
-	private static String getRestMethodCallUrl(String serverUrl, String method, Map<String, String> params) {
-		if (params == null)
-			params = mRequiredParams;
-		else
-			params.putAll(mRequiredParams);
-
-		String call = "";
-
-		// assume http if no protocol given
-		if (!serverUrl.contains("://"))
-			call += "http://";
-
-		call += serverUrl;
-
-		if (method != null)
-			call += "/" + method;
-
-		String query = "";
-		for (Map.Entry<String, String> param : params.entrySet())
-			try {
-				query += URLEncoder.encode(param.getKey(), "UTF-8") + "=" +
-						URLEncoder.encode(param.getValue(), "UTF-8") + "&";
-			} catch (UnsupportedEncodingException e) {
-				// if this happens, the whole OS has gone to shit
-				throw new AssertionError("UTF-8 not supported");
-			}
-
-		// trim trailing '&'
-		query = query.substring(0, query.length() - 1);
-		call += "?" + query;
-
-		return call;
-	}
-	private static String getRestMethodCallUrl(final String serverUrl, final String method, final String key, final int param) {
-		return getRestMethodCallUrl(serverUrl, method, new HashMap<String, String>() {{ put(key, Integer.toString(param)); }});
-	}
-	private static String getRestMethodCallUrl(String serverUrl, String method) {
-		return getRestMethodCallUrl(serverUrl, method, null);
 	}
 
 	static interface OnCursorRetrievedListener {
@@ -534,9 +483,9 @@ class SubsonicCaller extends RESTCaller {
 		}
 
 		@Override
-		protected void onPostExecute(String s) {
-			if (s != null)
-				mCallbackListener.onRestResponse(s);
+		protected void onPostExecute(String response) {
+			if (response != null)
+				mCallbackListener.onRestResponse(response);
 		}
 	}
 
@@ -580,8 +529,12 @@ class SubsonicCaller extends RESTCaller {
 					return cursor;
 
 				try {
-					String response = getRestResponse(getRestMethodCallUrl(mServerUrl, Methods.GET_MEDIA_FOLDERS),
-							mUsername, mPassword);
+					String response = getRestResponse(
+							buildRestCall(mServerUrl, Methods.GET_MEDIA_FOLDERS, mRequiredParams),
+							mUsername,
+							mPassword
+					);
+
 					if (isCancelled()) return null;
 
 					JSONObject jResponse = parseSubsonicResponse(response);
@@ -612,12 +565,20 @@ class SubsonicCaller extends RESTCaller {
 
 			// otherwise, get the data from the server and insert it in the database, then return a new cursor
 			try {
-				String call = mFolder.isTopLevel ?
-						getRestMethodCallUrl(mServerUrl, Methods.LIST_MEDIA_FOLDER_CONTENTS, "musicFolderId", -mFolder.id) :
-						getRestMethodCallUrl(mServerUrl, Methods.LIST_FOLDER_CONTENTS, "id", mFolder.id);
+				Map<String, String> params = new HashMap<String, String>(mRequiredParams);
+				if (mFolder.isTopLevel)
+					params.put("musicFolderId", Integer.toString(-mFolder.id));
+				else
+					params.put("id", Integer.toString(mFolder.id));
 
 				String response;
-				response = getRestResponse(call);
+				response = getRestResponse(
+						mFolder.isTopLevel ?
+								buildRestCall(mServerUrl, Methods.LIST_MEDIA_FOLDER_CONTENTS, params) :
+								buildRestCall(mServerUrl, Methods.LIST_FOLDER_CONTENTS, params),
+						mUsername,
+						mPassword
+				);
 				if (isCancelled()) return null;
 
 				JSONObject jResponse = parseSubsonicResponse(response);
@@ -668,89 +629,101 @@ class SubsonicCaller extends RESTCaller {
 		}
 	}
 
-	/**
-	 * Streams a given media file to a capable external app via an Intent.
-	 *
-	 * @param mediaFile             The MediaFile to stream.
-	 * @param maxBitRate            (1.2.0+) The maximum bit rate to transcode to; 0 for unlimited.
-	 * @param format                (1.6.0+) The preferred transcoding format (e.g. "mp3", "flv") (can be null).
-	 * @param timeOffset            The offset (in seconds) at which to start streaming a video file.
-	 * @param videoSize             (1.6.0+) The size (in "WIDTHxHEIGHT" format) to request a video in (can be null).
-	 * @param estimateContentLength (1.8.0+) Whether to estimate the content size in the Content-Length HTTP header.
-	 * @throws java.net.MalformedURLException If the URL is somehow bad.
-	 * @throws java.io.UnsupportedEncodingException
-	 *
-	 */
-	static void stream(FilesystemEntry.MediaFile mediaFile, int maxBitRate, String format, int timeOffset, String videoSize, boolean estimateContentLength) throws MalformedURLException, UnsupportedEncodingException, URISyntaxException {
+//	/**
+//	 * Streams a given media file to a capable external app via an Intent.
+//	 *
+//	 * @param mediaFile             The MediaFile to stream.
+//	 * @param maxBitRate            (1.2.0+) The maximum bit rate to transcode to; 0 for unlimited.
+//	 * @param format                (1.6.0+) The preferred transcoding format (e.g. "mp3", "flv") (can be null).
+//	 * @param timeOffset            The offset (in seconds) at which to start streaming a video file.
+//	 * @param videoSize             (1.6.0+) The size (in "WIDTHxHEIGHT" format) to request a video in (can be null).
+//	 * @param estimateContentLength (1.8.0+) Whether to estimate the content size in the Content-Length HTTP header.
+//	 * @throws java.net.MalformedURLException If the URL is somehow bad.
+//	 * @throws java.io.UnsupportedEncodingException
+//	 *
+//	 */
+//	static void stream(FilesystemEntry.MediaFile mediaFile, int maxBitRate, String format, int timeOffset, String videoSize, boolean estimateContentLength) throws MalformedURLException, UnsupportedEncodingException, URISyntaxException {
+//		Map<String, String> params = new HashMap<String, String>(mRequiredParams);
+//		params.put("id", Integer.toString(mediaFile.id));
+//		if (maxBitRate > 0)
+//			params.put("maxBitRate", Integer.toString(maxBitRate));
+//		if (format != null)
+//			params.put("format", format);
+//		if (timeOffset > 0)
+//			params.put("timeOffset", Integer.toString(timeOffset));
+//		if (videoSize != null)
+//			params.put("size", videoSize);
+//		if (estimateContentLength)
+//			params.put("estimateContentLength", "true");
+//
+//		Uri streamUri = Uri.parse(buildRestCall(mServerUrl, Methods.STREAM, params).toString());
+//		Intent intent = new Intent(Intent.ACTION_VIEW);
+//		Log.d(logTag, Boolean.toString(mediaFile.isVideo));
+//		if (mediaFile.isVideo)
+//			intent.setDataAndType(streamUri, mediaFile.transcodedContentType != null ? mediaFile.transcodedContentType : "video/*");
+//		else
+//			intent.setDataAndType(streamUri, mediaFile.transcodedContentType != null ? mediaFile.transcodedContentType : "audio/*");
+//		Log.d(logTag, "trying to stream from " + streamUri.toString());
+//		mActivity.startActivity(intent);
+//	}
+//
+//	/**
+//	 * Returns a DownloadTask for a transcoded file.
+//	 *
+//	 * @param mediaFile             The MediaFile to stream.
+//	 * @param maxBitRate            (1.2.0+) The maximum bit rate to transcode to; 0 for unlimited.
+//	 * @param format                (1.6.0+) The preferred transcoding format (e.g. "mp3", "flv") (can be null).
+//	 * @param timeOffset            The offset (in seconds) at which to start streaming a video file.
+//	 * @param videoSize             (1.6.0+) The size (in "WIDTHxHEIGHT" format) to request a video in (can be null).
+//	 * @param estimateContentLength (1.8.0+) Whether to estimate the content size in the Content-Length HTTP header.
+//	 * @throws java.net.MalformedURLException If the URL is somehow bad.
+//	 * @throws java.io.UnsupportedEncodingException
+//	 *
+//	 */
+//	static DownloadTask getTranscodedDownloadTask(final FilesystemEntry.MediaFile mediaFile, final int maxBitRate, final String format, final int timeOffset, final String videoSize, final boolean estimateContentLength) throws IOException, URISyntaxException {
+//		URI downloadURL = buildRestCall(mServerUrl, Methods.STREAM, new HashMap<String, String>(mRequiredParams) {{
+//			put("id", Integer.toString(mediaFile.id));
+//			if (maxBitRate > 0)
+//				put("maxBitRate", Integer.toString(maxBitRate));
+//			if (timeOffset > 0)
+//				put("timeOffset", Integer.toString(timeOffset));
+//			if (videoSize != null)
+//				put("videoSize", videoSize);
+//			if (estimateContentLength)
+//				put("estimateContentLength", "true");
+//		}});
+//
+//		String extStorageDir = Environment.getExternalStorageDirectory().toString() + "/SubsonicClient/";
+//		String filePath = extStorageDir + mediaFile.path.substring(0, mediaFile.path.lastIndexOf('.') + 1) + (mediaFile.transcodedSuffix != null ? mediaFile.transcodedSuffix : mediaFile.suffix);
+//		return new DownloadTask(downloadURL, mediaFile.name, filePath);
+//	}
+
+	static String getDownloadUrl(FilesystemEntry.MediaFile mediaFile, boolean transcoded) throws MalformedURLException, URISyntaxException, UnsupportedEncodingException {
 		Map<String, String> params = new HashMap<String, String>(mRequiredParams);
 		params.put("id", Integer.toString(mediaFile.id));
-		if (maxBitRate > 0)
-			params.put("maxBitRate", Integer.toString(maxBitRate));
-		if (format != null)
-			params.put("format", format);
-		if (timeOffset > 0)
-			params.put("timeOffset", Integer.toString(timeOffset));
-		if (videoSize != null)
-			params.put("size", videoSize);
-		if (estimateContentLength)
-			params.put("estimateContentLength", "true");
 
-		Uri streamUri = Uri.parse(buildRestCallUri(mServerUrl, Methods.STREAM, params).toString());
-		Intent intent = new Intent(Intent.ACTION_VIEW);
-		Log.d(logTag, Boolean.toString(mediaFile.isVideo));
-		if (mediaFile.isVideo)
-			intent.setDataAndType(streamUri, mediaFile.transcodedContentType != null ? mediaFile.transcodedContentType : "video/*");
-		else
-			intent.setDataAndType(streamUri, mediaFile.transcodedContentType != null ? mediaFile.transcodedContentType : "audio/*");
-		Log.d(logTag, "trying to stream from " + streamUri.toString());
-		mActivity.startActivity(intent);
+		return buildRestCall(
+				mServerUrl,
+				transcoded ? Methods.STREAM : Methods.DOWNLOAD,
+				params
+		);
 	}
 
-	/**
-	 * Returns a DownloadTask for a transcoded file.
-	 *
-	 * @param mediaFile             The MediaFile to stream.
-	 * @param maxBitRate            (1.2.0+) The maximum bit rate to transcode to; 0 for unlimited.
-	 * @param format                (1.6.0+) The preferred transcoding format (e.g. "mp3", "flv") (can be null).
-	 * @param timeOffset            The offset (in seconds) at which to start streaming a video file.
-	 * @param videoSize             (1.6.0+) The size (in "WIDTHxHEIGHT" format) to request a video in (can be null).
-	 * @param estimateContentLength (1.8.0+) Whether to estimate the content size in the Content-Length HTTP header.
-	 * @throws java.net.MalformedURLException If the URL is somehow bad.
-	 * @throws java.io.UnsupportedEncodingException
-	 *
-	 */
-	static DownloadTask getTranscodedDownloadTask(final FilesystemEntry.MediaFile mediaFile, final int maxBitRate, final String format, final int timeOffset, final String videoSize, final boolean estimateContentLength) throws IOException, URISyntaxException {
-		URI downloadURL = buildRestCallUri(mServerUrl, Methods.STREAM, new HashMap<String, String>(mRequiredParams) {{
-			put("id", Integer.toString(mediaFile.id));
-			if (maxBitRate > 0)
-				put("maxBitRate", Integer.toString(maxBitRate));
-			if (timeOffset > 0)
-				put("timeOffset", Integer.toString(timeOffset));
-			if (videoSize != null)
-				put("videoSize", videoSize);
-			if (estimateContentLength)
-				put("estimateContentLength", "true");
-		}});
-
-		String extStorageDir = Environment.getExternalStorageDirectory().toString() + "/SubsonicClient/";
-		String filePath = extStorageDir + mediaFile.path.substring(0, mediaFile.path.lastIndexOf('.') + 1) + (mediaFile.transcodedSuffix != null ? mediaFile.transcodedSuffix : mediaFile.suffix);
-		return new DownloadTask(downloadURL, mediaFile.name, filePath);
-	}
-
-	/**
-	 * Returns a DownloadTask for an original (non-transcoded) file.
-	 *
-	 * @param mediaFile The MediaFile to download.
-	 * @throws java.net.MalformedURLException
-	 * @throws java.io.UnsupportedEncodingException
-	 *
-	 */
-	static DownloadTask getOriginalDownloadTask(final FilesystemEntry.MediaFile mediaFile) throws IOException, UnsupportedEncodingException, URISyntaxException {
-		URI downloadURL = buildRestCallUri(mServerUrl, Methods.DOWNLOAD, new HashMap<String, String>(mRequiredParams) {{
-			put("id", Integer.toString(mediaFile.id));
-		}});
-
-		String filePath = Environment.getExternalStorageDirectory().toString() + "/SubsonicClient/" + mediaFile.path;
-		return new DownloadTask(downloadURL, mediaFile.name, filePath);
-	}
+//
+//	/**
+//	 * Returns a DownloadTask for an original (non-transcoded) file.
+//	 *
+//	 * @param mediaFile The MediaFile to download.
+//	 * @throws java.net.MalformedURLException
+//	 * @throws java.io.UnsupportedEncodingException
+//	 *
+//	 */
+//	static DownloadTask getOriginalDownloadTask(final FilesystemEntry.MediaFile mediaFile) throws IOException, URISyntaxException {
+//		URI downloadURL = buildRestCall(mServerUrl, Methods.DOWNLOAD, new HashMap<String, String>(mRequiredParams) {{
+//			put("id", Integer.toString(mediaFile.id));
+//		}});
+//
+//		String filePath = Environment.getExternalStorageDirectory().toString() + "/SubsonicClient/" + mediaFile.path;
+//		return new DownloadTask(downloadURL, mediaFile.name, filePath);
+//	}
 }
