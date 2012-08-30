@@ -1,7 +1,6 @@
 /*
  * Copyright (c) 2012, Joseph Casamento
  * All rights reserved.
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -29,11 +28,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.database.Cursor;
 import android.os.Bundle;
-import android.os.Environment;
-import android.support.v4.app.DialogFragment;
-import android.support.v4.app.FragmentTransaction;
 import android.support.v4.widget.CursorAdapter;
-import android.support.v4.widget.SimpleCursorAdapter;
 import android.util.Log;
 import android.view.ContextMenu;
 import android.view.ContextMenu.ContextMenuInfo;
@@ -46,27 +41,26 @@ import com.actionbarsherlock.app.SherlockListFragment;
 import com.actionbarsherlock.view.Menu;
 import com.actionbarsherlock.view.MenuItem;
 
-import java.io.UnsupportedEncodingException;
-import java.net.MalformedURLException;
-import java.net.URISyntaxException;
-import java.util.List;
-import java.util.Stack;
-
 import static android.widget.AdapterView.OnItemClickListener;
-import static com.casamento.subsonicclient.SubsonicCaller.*;
+import static com.casamento.subsonicclient.FilesystemEntry.Folder;
+import static com.casamento.subsonicclient.FilesystemEntry.MediaFile;
+import static com.casamento.subsonicclient.SubsonicCaller.DatabaseHelper;
 
 // TODO: use xml for layout
 public class ServerBrowserFragment extends SherlockListFragment {
 	private static final String logTag = "ServerBrowserFragment";
-	private ListView mListView;
-	private Cursor mCursor;
+	private final Cursor mCursor;
 
-	private ActivityCallbackInterface mActivity;
+	private ActivityCallback mActivity;
 
 	// containing Activity must implement this interface; enforced in onAttach
-	interface ActivityCallbackInterface {
-		void pushServerBrowserFragment(FilesystemEntry.Folder folder);
-		void initiateDownload(FilesystemEntry.MediaFile mediaFile, boolean transcoded);
+	interface ActivityCallback {
+		void pushServerBrowserFragment(Folder folder);
+		void initiateDownload(MediaFile mediaFile, boolean transcoded);
+	}
+
+	public ServerBrowserFragment() {
+		mCursor = null;
 	}
 
 	ServerBrowserFragment(Cursor cursor) {
@@ -79,11 +73,11 @@ public class ServerBrowserFragment extends SherlockListFragment {
 
 		// ensure activity implements the interface this Fragment needs
 		try {
-			mActivity = (ActivityCallbackInterface)activity;
+			mActivity = (ActivityCallback)activity;
 			setListAdapter(new FilesystemEntryCursorAdapter(getSherlockActivity(), mCursor, false));
 		} catch (ClassCastException e) {
 			throw new ClassCastException(mActivity.toString() + " must implement " +
-					"ServerBrowserFragment.ActivityCallbackInterface");
+					"ServerBrowserFragment.ActivityCallback");
 		}
 	}
 
@@ -93,10 +87,10 @@ public class ServerBrowserFragment extends SherlockListFragment {
 
 		setHasOptionsMenu(true);
 
-		mListView = getListView();
-		mListView.setOnItemClickListener(filesystemEntryClickListener);
-		registerForContextMenu(mListView);
-		mListView.setFastScrollEnabled(true);
+		final ListView lv = getListView();
+		lv.setOnItemClickListener(filesystemEntryClickListener);
+		registerForContextMenu(lv);
+		lv.setFastScrollEnabled(true);
 	}
 
 	// bug fix as per https://code.google.com/p/android/issues/detail?id=19917
@@ -120,7 +114,7 @@ public class ServerBrowserFragment extends SherlockListFragment {
 		if (entry.isFolder) {
 			getSherlockActivity().getMenuInflater().inflate(R.menu.contextmenu_folder, menu);
 		} else {
-			FilesystemEntry.MediaFile mediaFile = (FilesystemEntry.MediaFile)entry;
+			MediaFile mediaFile = (MediaFile)entry;
 			getSherlockActivity().getMenuInflater().inflate(R.menu.contextmenu_file, menu);
 			menu.findItem(R.id.fileContextMenu_downloadOriginalFile).setTitle("Download Original File (" +
 					mediaFile.suffix + ")");
@@ -132,10 +126,10 @@ public class ServerBrowserFragment extends SherlockListFragment {
 	@Override
 	public boolean onContextItemSelected(android.view.MenuItem item) {
 		AdapterContextMenuInfo info = (AdapterContextMenuInfo)item.getMenuInfo();
-		FilesystemEntry entry = FilesystemEntry.getInstance((Cursor) mListView.getAdapter().getItem(info.position));
+		FilesystemEntry entry = FilesystemEntry.getInstance((Cursor) getListAdapter().getItem(info.position));
 
 		if (entry.isFolder) {
-			FilesystemEntry.Folder folder = (FilesystemEntry.Folder)entry;
+			Folder folder = (Folder)entry;
 
 			switch (item.getItemId()) {
 				case R.id.folderContextMenu_downloadOriginal:
@@ -147,7 +141,7 @@ public class ServerBrowserFragment extends SherlockListFragment {
 					break;
 			}
 		} else {
-			FilesystemEntry.MediaFile mediaFile = (FilesystemEntry.MediaFile)entry;
+			MediaFile mediaFile = (MediaFile)entry;
 
 			switch(item.getItemId()) {
 				case R.id.fileContextMenu_downloadOriginalFile:
@@ -203,7 +197,7 @@ public class ServerBrowserFragment extends SherlockListFragment {
 		public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
 			FilesystemEntry entry = SubsonicCaller.getFilesystemEntry((Integer) view.getTag());
 			if (entry.isFolder)
-				mActivity.pushServerBrowserFragment((FilesystemEntry.Folder) entry);
+				mActivity.pushServerBrowserFragment((Folder) entry);
 		}
 	};
 

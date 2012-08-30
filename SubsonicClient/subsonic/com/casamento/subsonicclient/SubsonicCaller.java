@@ -1,7 +1,6 @@
 /*
  * Copyright (c) 2012, Joseph Casamento
  * All rights reserved.
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -666,64 +665,11 @@ class SubsonicCaller extends RestCaller {
 //		Log.d(logTag, "trying to stream from " + streamUri.toString());
 //		mActivity.startActivity(intent);
 //	}
-//
-//	/**
-//	 * Returns a DownloadTask for a transcoded file.
-//	 *
-//	 * @param mediaFile             The MediaFile to stream.
-//	 * @param maxBitRate            (1.2.0+) The maximum bit rate to transcode to; 0 for unlimited.
-//	 * @param format                (1.6.0+) The preferred transcoding format (e.g. "mp3", "flv") (can be null).
-//	 * @param timeOffset            The offset (in seconds) at which to start streaming a video file.
-//	 * @param videoSize             (1.6.0+) The size (in "WIDTHxHEIGHT" format) to request a video in (can be null).
-//	 * @param estimateContentLength (1.8.0+) Whether to estimate the content size in the Content-Length HTTP header.
-//	 * @throws java.net.MalformedURLException If the URL is somehow bad.
-//	 * @throws java.io.UnsupportedEncodingException
-//	 *
-//	 */
-//	static DownloadTask getTranscodedDownloadTask(final FilesystemEntry.MediaFile mediaFile, final int maxBitRate, final String format, final int timeOffset, final String videoSize, final boolean estimateContentLength) throws IOException, URISyntaxException {
-//		URI downloadURL = buildRestCall(mServerUrl, Methods.STREAM, new HashMap<String, String>(mRequiredParams) {{
-//			put("id", Integer.toString(mediaFile.id));
-//			if (maxBitRate > 0)
-//				put("maxBitRate", Integer.toString(maxBitRate));
-//			if (timeOffset > 0)
-//				put("timeOffset", Integer.toString(timeOffset));
-//			if (videoSize != null)
-//				put("videoSize", videoSize);
-//			if (estimateContentLength)
-//				put("estimateContentLength", "true");
-//		}});
-//
-//		String extStorageDir = Environment.getExternalStorageDirectory().toString() + "/SubsonicClient/";
-//		String filePath = extStorageDir + mediaFile.path.substring(0, mediaFile.path.lastIndexOf('.') + 1) + (mediaFile.transcodedSuffix != null ? mediaFile.transcodedSuffix : mediaFile.suffix);
-//		return new DownloadTask(downloadURL, mediaFile.name, filePath);
-//	}
 
 	static String getDownloadUrl(FilesystemEntry.MediaFile mediaFile, boolean transcoded) throws MalformedURLException, URISyntaxException, UnsupportedEncodingException {
 		Map<String, String> params = new HashMap<String, String>(mRequiredParams);
 		params.put("id", Integer.toString(mediaFile.id));
 
-		return buildRestCall(
-				mServerUrl,
-				transcoded ? Methods.STREAM : Methods.DOWNLOAD,
-				params
-		);
+		return buildRestCall(mServerUrl, transcoded ? Methods.STREAM : Methods.DOWNLOAD, params);
 	}
-
-//
-//	/**
-//	 * Returns a DownloadTask for an original (non-transcoded) file.
-//	 *
-//	 * @param mediaFile The MediaFile to download.
-//	 * @throws java.net.MalformedURLException
-//	 * @throws java.io.UnsupportedEncodingException
-//	 *
-//	 */
-//	static DownloadTask getOriginalDownloadTask(final FilesystemEntry.MediaFile mediaFile) throws IOException, URISyntaxException {
-//		URI downloadURL = buildRestCall(mServerUrl, Methods.DOWNLOAD, new HashMap<String, String>(mRequiredParams) {{
-//			put("id", Integer.toString(mediaFile.id));
-//		}});
-//
-//		String filePath = Environment.getExternalStorageDirectory().toString() + "/SubsonicClient/" + mediaFile.path;
-//		return new DownloadTask(downloadURL, mediaFile.name, filePath);
-//	}
 }
