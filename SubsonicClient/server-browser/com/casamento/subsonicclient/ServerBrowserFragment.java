@@ -71,10 +71,12 @@ public class ServerBrowserFragment extends SherlockListFragment {
 	public void onAttach(Activity activity) {
 		super.onAttach(activity);
 
+		if (mCursor != null)
+			setListAdapter(new FilesystemEntryCursorAdapter(getSherlockActivity(), mCursor, false));
+
 		// ensure activity implements the interface this Fragment needs
 		try {
 			mActivity = (ActivityCallback)activity;
-			setListAdapter(new FilesystemEntryCursorAdapter(getSherlockActivity(), mCursor, false));
 		} catch (ClassCastException e) {
 			throw new ClassCastException(mActivity.toString() + " must implement " +
 					"ServerBrowserFragment.ActivityCallback");

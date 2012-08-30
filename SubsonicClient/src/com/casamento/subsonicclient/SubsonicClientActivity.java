@@ -223,13 +223,19 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 
 	// for fragment management
 	private ServerBrowserFragment mServerBrowserFragment;
-	private DownloadManagerFragment mDownloadManagerFragment;
+	private ActionBar.Tab mServerBrowserTab;
 
-	private void pushFragment(Fragment fragment) {
-		FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+	private DownloadManagerFragment mDownloadManagerFragment;
+	private ActionBar.Tab mDownloadManagerTab;
+
+	private void pushFragment(final Fragment fragment, final boolean addToBackStack) {
+		final FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
 
 		transaction.replace(R.id.fragment_container, fragment);
-		transaction.addToBackStack(null);
+
+		if (addToBackStack)
+			transaction.addToBackStack(null);
+
 		transaction.commit();
 	}
 
@@ -238,10 +244,10 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 		unbindDownloadService();
 	}
 
-	class OnTabActionListener implements ActionBar.TabListener {
-		private Fragment mFragment;
+	class TabActionListener implements ActionBar.TabListener {
+		private final Fragment mFragment;
 
-		public OnTabActionListener(Fragment fragment) {
+		private TabActionListener(Fragment fragment) {
 			super();
 			mFragment = fragment;
 		}
@@ -258,7 +264,7 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 
 		@Override
 		public void onTabReselected(ActionBar.Tab tab, FragmentTransaction ft) {
-			// do something?
+			// TODO: do something?
 		}
 	}
 
@@ -274,7 +280,11 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 		final ActionBar actionBar = getSupportActionBar();
 		actionBar.setNavigationMode(ActionBar.NAVIGATION_MODE_TABS);
 
-		final ActionBar.Tab serverBrowserTab = actionBar.newTab().setText("Server");
+		mServerBrowserFragment = new ServerBrowserFragment();
+
+		mServerBrowserTab = actionBar.newTab().setText("Server");
+		mServerBrowserTab.setTabListener(new TabActionListener(mServerBrowserFragment));
+		actionBar.addTab(mServerBrowserTab);
 
 		showProgressSpinner();
 		try {
@@ -282,10 +292,7 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 				@Override
 				public void onCursorRetrieved(Cursor cursor) {
 					if (cursor != null && cursor.getCount() >= 0) {
-						mServerBrowserFragment = new ServerBrowserFragment(cursor);
-						serverBrowserTab.setTabListener(new OnTabActionListener(mServerBrowserFragment));
-						actionBar.addTab(serverBrowserTab, 0);
-						actionBar.selectTab(serverBrowserTab);
+						pushServerBrowserFragment(new ServerBrowserFragment(cursor), false);
 						hideProgressSpinner();
 					} else {
 						hideProgressSpinner();
@@ -315,9 +322,9 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 			Log.e(logTag, e.getLocalizedMessage());
 		}
 
-		ActionBar.Tab downloadManagerTab = actionBar.newTab().setText("Downloads");
+		final ActionBar.Tab downloadManagerTab = actionBar.newTab().setText("Downloads");
 		mDownloadManagerFragment = new DownloadManagerFragment();
-		downloadManagerTab.setTabListener(new OnTabActionListener(mDownloadManagerFragment));
+		downloadManagerTab.setTabListener(new TabActionListener(mDownloadManagerFragment));
 		actionBar.addTab(downloadManagerTab);
 
 		bindDownloadService();
@@ -405,6 +412,12 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 		});
 	}
 
+	private void pushServerBrowserFragment(final ServerBrowserFragment sbf, final boolean addToBackStack) {
+		mServerBrowserFragment = sbf;
+		mServerBrowserTab.setTabListener(new TabActionListener(sbf));
+		pushFragment(sbf, addToBackStack);
+	}
+
 	@Override
 	public void pushServerBrowserFragment(FilesystemEntry.Folder folder) {
 		showProgressSpinner();
@@ -413,8 +426,7 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 			getRetrieveCursorTask(folder, new OnCursorRetrievedListener() {
 				@Override
 				public void onCursorRetrieved(Cursor cursor) {
-					mServerBrowserFragment = new ServerBrowserFragment(cursor);
-					pushFragment(mServerBrowserFragment);
+					pushServerBrowserFragment(new ServerBrowserFragment(cursor), true);
 					hideProgressSpinner();
 				}
 
