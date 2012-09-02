@@ -1,7 +1,6 @@
 /*
  * Copyright (c) 2012, Joseph Casamento
  * All rights reserved.
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -53,7 +52,7 @@ abstract class FilesystemEntry {
 		else newEntry = new MediaFile(j);
 
 		newEntry.id = j.getInt("id");
-		newEntry.parentId = j.optInt("parentId", Integer.MIN_VALUE);
+		newEntry.parentId = j.optInt("parentId", Folder.NULL_ID);
 		newEntry.isFolder = isFolder;
 
 		newEntry.name = j.optString("name", null);
@@ -93,6 +92,7 @@ abstract class FilesystemEntry {
 	}
 
 	static class Folder extends FilesystemEntry {
+		final static int NULL_ID = Integer.MIN_VALUE;
 		final int coverArtId;
 		final String artist, album;
 		final Calendar created;
@@ -116,8 +116,8 @@ abstract class FilesystemEntry {
 			artist	= Util.fixHTML(jFolder.optString("artist", null));
 			album	= Util.fixHTML(jFolder.optString("album", null));
 
-			parentId	= jFolder.optInt("parent", Integer.MIN_VALUE);
-			coverArtId	= jFolder.optInt("coverArt", Integer.MIN_VALUE);
+			parentId	= jFolder.optInt("parent", NULL_ID);
+			coverArtId	= jFolder.optInt("coverArt", NULL_ID);
 
 			created = Util.getDateFromString(jFolder.optString("created", null));
 		}

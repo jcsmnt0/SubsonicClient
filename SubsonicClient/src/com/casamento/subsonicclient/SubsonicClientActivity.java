@@ -35,10 +35,13 @@ import android.text.TextUtils;
 import android.util.Log;
 import com.actionbarsherlock.app.ActionBar;
 import com.actionbarsherlock.app.SherlockFragmentActivity;
+import com.actionbarsherlock.view.Menu;
+import com.actionbarsherlock.view.MenuItem;
 import com.actionbarsherlock.view.Window;
 
 import java.util.*;
 
+import static com.casamento.subsonicclient.FilesystemEntry.Folder;
 import static com.casamento.subsonicclient.FilesystemEntry.MediaFile;
 import static com.casamento.subsonicclient.SubsonicCaller.*;
 
@@ -50,7 +53,7 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 
 	// DownloadService stuff
 
-	private final List<DownloadListener> mDownloadListeners = new ArrayList<DownloadListener>();
+	private final Collection<DownloadListener> mDownloadListeners = new ArrayList<DownloadListener>();
 	private final Map<String, Download> mDownloads = new HashMap<String, Download>();
 
 	private void bindDownloadService() {
@@ -60,28 +63,28 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 
 	private void unbindDownloadService() {
 		if (DownloadServiceOutbox.service != null) {
-			DownloadServiceOutbox.postClientUnregistrationRequest(mDownloadServiceInbox);
+			DownloadServiceOutbox.postClientUnregistration(mDownloadServiceInbox);
 		}
 
 		unbindService(mDownloadServiceConnection);
 	}
 
 	@Override
-	public void registerListener(DownloadListener dl) {
+	public void registerListener(final DownloadListener dl) {
 		mDownloadListeners.add(dl);
 	}
 
 	@Override
-	public void unregisterListener(DownloadListener dl) {
+	public void unregisterListener(final DownloadListener dl) {
 		mDownloadListeners.remove(dl);
 	}
 
 	@Override
-	public Collection<Download> getDownloadList(DownloadListener dl) {
+	public Collection<Download> getDownloadList(final DownloadListener dl) {
 		return mDownloads.values();
 	}
 
-	static interface DownloadListener {
+	interface DownloadListener {
 		void onAddition(Download download);
 		void onStart(Download download);
 		void onProgressUpdate(Download download);
@@ -92,7 +95,7 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 		@Override
 		public void onServiceConnected(final ComponentName className, final IBinder service) {
 			DownloadServiceOutbox.service = new Messenger(service);
-			DownloadServiceOutbox.postClientRegistrationRequest(mDownloadServiceInbox);
+			DownloadServiceOutbox.postClientRegistration(mDownloadServiceInbox);
 		}
 
 		@Override
@@ -105,7 +108,7 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 	// TODO: refactor to use Intents for fun and profit
 	private final Messenger mDownloadServiceInbox = new Messenger(new Handler() {
 		@Override
-		public void handleMessage(Message msg) {
+		public void handleMessage(final Message msg) {
 			final Bundle msgData = msg.getData();
 			msgData.setClassLoader(getClassLoader());
 
@@ -156,12 +159,12 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 	});
 
 	private static class DownloadServiceOutbox {
-		private static Messenger service = null;
+		private static Messenger service;
 
-		private static void postClientRegistrationRequest(final Messenger replyTo) {
+		private static void postClientRegistration(final Messenger client) {
 			try {
 				final Message msg = Message.obtain(null, DownloadService.IncomingMessages.REGISTER_CLIENT.ordinal());
-				msg.replyTo = replyTo;
+				msg.replyTo = client;
 				service.send(msg);
 			} catch (RemoteException e) {
 				// Service has crashed and will be automatically reconnected
@@ -169,10 +172,10 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 			}
 		}
 
-		private static void postClientUnregistrationRequest(final Messenger replyTo) {
+		private static void postClientUnregistration(final Messenger client) {
 			try {
 				final Message msg = Message.obtain(null, DownloadService.IncomingMessages.UNREGISTER_CLIENT.ordinal());
-				msg.replyTo = replyTo;
+				msg.replyTo = client;
 				service.send(msg);
 			} catch (RemoteException e) {
 				// Service has crashed and will be automatically reconnected
@@ -181,7 +184,7 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 			}
 		}
 
-		private static void postDownloadInitiationRequest(final MediaFile mediaFile, final boolean transcoded) {
+		private static void postDownload(final MediaFile mediaFile, final boolean transcoded) {
 			final Bundle msgData = new Bundle();
 
 			try {
@@ -197,18 +200,16 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 				msgData.putString("username", SubsonicCaller.getUsername());
 				msgData.putString("password", SubsonicCaller.getPassword());
 
-				try {
-					postMessage(DownloadService.IncomingMessages.INITIATE_DOWNLOAD, msgData);
-				} catch (RemoteException e) {
-					// Service has crashed and will be automatically restarted
-					// TODO: queue message and resend once service is back up
-				}
-			} catch (Throwable t) {
+				postMessage(DownloadService.IncomingMessages.INITIATE_DOWNLOAD, msgData);
+			} catch (final RemoteException e) {
+				// Service has crashed and will be automatically restarted
+				// TODO: queue message and resend once service is back up
+			} catch (final Throwable t) {
 				Log.e(logTag, "Error", t);
 			}
 		}
 
-		private static void postMessage(DownloadService.IncomingMessages messageType, Bundle msgData) throws RemoteException {
+		private static void postMessage(final DownloadService.IncomingMessages messageType, final Bundle msgData) throws RemoteException {
 			final Message msg = Message.obtain(null, messageType.ordinal());
 			msg.setData(msgData);
 
@@ -217,8 +218,45 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 	}
 
 	@Override
-	public void initiateDownload(MediaFile mediaFile, boolean transcoded) {
-		DownloadServiceOutbox.postDownloadInitiationRequest(mediaFile, transcoded);
+	public void download(final FilesystemEntry entry, final boolean transcoded) {
+		if (entry.isFolder) {
+			final Folder f = (Folder) entry;
+			try {
+				getRetrieveCursorTask(f, new CursorTaskListener() {
+					@Override
+					public void onPreExecute() {
+					}
+
+					@Override
+					public void onProgressUpdate(final Integer... p) {
+					}
+
+					@Override
+					public void onResult(final Cursor cursor) {
+						final int entryCount = cursor.getCount();
+						cursor.moveToFirst();
+
+						for (int entryIndex = 0; entryIndex < entryCount; entryIndex++) {
+							download(FilesystemEntry.getInstance(cursor), transcoded);
+							cursor.moveToNext();
+						}
+					}
+
+					@Override
+					public void onException(final Exception e) {
+						Log.e(logTag, "Error", e);
+					}
+				}).execute();
+			} catch (ServerNotSetUpException e) {
+				showDialogFragment(new AlertDialogFragment.Builder(this)
+						.setMessage(e.getLocalizedMessage())
+						.setTitle("Error")
+						.setNeutralButton("OK")
+						.create());
+			}
+		} else {
+			DownloadServiceOutbox.postDownload((MediaFile) entry, transcoded);
+		}
 	}
 
 	// for fragment management
@@ -228,42 +266,41 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 	private DownloadManagerFragment mDownloadManagerFragment;
 	private ActionBar.Tab mDownloadManagerTab;
 
-	private void pushFragment(final Fragment fragment, final boolean addToBackStack) {
+	private Stack<ServerBrowserFragment> serverBrowserFragmentStack = new Stack<ServerBrowserFragment>();
+
+	private void showFragment(final Fragment fragment) {
 		final FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
 
 		transaction.replace(R.id.fragment_container, fragment);
-
-		if (addToBackStack)
-			transaction.addToBackStack(null);
 
 		transaction.commit();
 	}
 
 	@Override
 	protected void onDestroy() {
+		super.onDestroy();
 		unbindDownloadService();
 	}
 
 	class TabActionListener implements ActionBar.TabListener {
 		private final Fragment mFragment;
 
-		private TabActionListener(Fragment fragment) {
-			super();
+		private TabActionListener(final Fragment fragment) {
 			mFragment = fragment;
 		}
 
 		@Override
-		public void onTabSelected(ActionBar.Tab tab, FragmentTransaction ft) {
+		public void onTabSelected(final ActionBar.Tab tab, final FragmentTransaction ft) {
 			ft.replace(R.id.fragment_container, mFragment);
 		}
 
 		@Override
-		public void onTabUnselected(ActionBar.Tab tab, FragmentTransaction ft) {
+		public void onTabUnselected(final ActionBar.Tab tab, final FragmentTransaction ft) {
 			ft.remove(mFragment);
 		}
 
 		@Override
-		public void onTabReselected(ActionBar.Tab tab, FragmentTransaction ft) {
+		public void onTabReselected(final ActionBar.Tab tab, final FragmentTransaction ft) {
 			// TODO: do something?
 		}
 	}
@@ -287,61 +324,28 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 		actionBar.addTab(mServerBrowserTab);
 
 		showProgressSpinner();
-		try {
-			RetrieveCursorTask task = getRetrieveCursorTask(new OnCursorRetrievedListener() {
-				@Override
-				public void onCursorRetrieved(Cursor cursor) {
-					if (cursor != null && cursor.getCount() >= 0) {
-						pushServerBrowserFragment(new ServerBrowserFragment(cursor), false);
-						hideProgressSpinner();
-					} else {
-						hideProgressSpinner();
-						showDialogFragment(new AlertDialogFragment.Builder(getApplicationContext())
-								.setTitle(R.string.error)
-								.setMessage("Something bad happened when getting the data.")
-								.setNeutralButton(R.string.ok)
-								.create());
-					}
-				}
 
-				@Override
-				public void onException(Exception e) {
-					e.printStackTrace();
-					hideProgressSpinner();
-					showDialogFragment(new AlertDialogFragment.Builder(getApplicationContext())
-							.setTitle(R.string.error)
-							.setMessage(e.getLocalizedMessage())
-							.setNeutralButton(R.string.ok)
-							.create());
-				}
-			});
-			task.execute();
-		} catch (Exception e) {
-			hideProgressSpinner();
-			e.printStackTrace();
-			Log.e(logTag, e.getLocalizedMessage());
-		}
+		showFolderContents(null, false);
 
-		final ActionBar.Tab downloadManagerTab = actionBar.newTab().setText("Downloads");
+		mDownloadManagerTab = actionBar.newTab().setText("Downloads");
 		mDownloadManagerFragment = new DownloadManagerFragment();
-		downloadManagerTab.setTabListener(new TabActionListener(mDownloadManagerFragment));
-		actionBar.addTab(downloadManagerTab);
+		mDownloadManagerTab.setTabListener(new TabActionListener(mDownloadManagerFragment));
+		actionBar.addTab(mDownloadManagerTab);
 
 		bindDownloadService();
 	}
 
 	@Override
-	public boolean onCreateOptionsMenu(final com.actionbarsherlock.view.Menu menu) {
+	public boolean onCreateOptionsMenu(final Menu menu) {
 		getSupportMenuInflater().inflate(R.menu.optionsmenu_main, menu);
 		return true;
 	}
 
 	@Override
-	public boolean onOptionsItemSelected(final com.actionbarsherlock.view.MenuItem item) {
+	public boolean onOptionsItemSelected(final MenuItem item) {
 		switch (item.getItemId()) {
 			case R.id.option_preferences:
-				Intent settingsActivity = new Intent(getBaseContext(), PreferenceActivity.class);
-				startActivity(settingsActivity);
+				startActivity(new Intent(getBaseContext(), PreferenceActivity.class));
 				return true;
 
 			default:
@@ -350,30 +354,25 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 	}
 
 	class ServerNotSetUpException extends Exception {
-		ServerNotSetUpException(String message) { super(message); }
+		ServerNotSetUpException() { super(getString(R.string.server_not_set_up)); }
 	}
 
 	private void connectToServer() throws ServerNotSetUpException {
-		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+		final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
 
-		String serverUrl, username, password;
+		final String serverUrl, username, password;
 		if (TextUtils.isEmpty(serverUrl = prefs.getString("serverUrl", "")) ||
 				TextUtils.isEmpty(username = prefs.getString("username", "")) ||
 				TextUtils.isEmpty(password = prefs.getString("password", "")))
-			throw new ServerNotSetUpException("The server has not been fully set up.");
+			throw new ServerNotSetUpException();
 
 		setServerDetails(serverUrl, username, password, this);
 		serverConnected = true;
 	}
 
-	private RetrieveCursorTask getRetrieveCursorTask(OnCursorRetrievedListener callbackListener) throws ServerNotSetUpException {
+	private CursorTask getRetrieveCursorTask(final Folder folder, final CursorTaskListener callbackListener) throws ServerNotSetUpException {
 		if (!serverConnected) connectToServer();
-		return new RetrieveCursorTask(callbackListener);
-	}
-
-	private RetrieveCursorTask getRetrieveCursorTask(FilesystemEntry.Folder folder, OnCursorRetrievedListener callbackListener) throws ServerNotSetUpException {
-		if (!serverConnected) connectToServer();
-		return new RetrieveCursorTask(folder, callbackListener);
+		return new CursorTask(folder, callbackListener);
 	}
 
 	private void showDialogFragment(final DialogFragment dialogFragment) {
@@ -381,15 +380,6 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 			@Override
 			public void run() {
 				dialogFragment.show(getSupportFragmentManager(), "dialog");
-			}
-		});
-	}
-
-	private void dismissDialogFragment(final DialogFragment dialogFragment) {
-		runOnUiThread(new Runnable() {
-			@Override
-			public void run() {
-				dialogFragment.dismiss();
 			}
 		});
 	}
@@ -412,26 +402,61 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 		});
 	}
 
-	private void pushServerBrowserFragment(final ServerBrowserFragment sbf, final boolean addToBackStack) {
+	private void showServerBrowserFragment(final ServerBrowserFragment sbf, final boolean addToStack) {
+		if (addToStack)
+			serverBrowserFragmentStack.push(mServerBrowserFragment);
+
 		mServerBrowserFragment = sbf;
-		mServerBrowserTab.setTabListener(new TabActionListener(sbf));
-		pushFragment(sbf, addToBackStack);
+		mServerBrowserTab.setTabListener(new TabActionListener(mServerBrowserFragment));
+
+		showFragment(mServerBrowserFragment);
 	}
 
 	@Override
-	public void pushServerBrowserFragment(FilesystemEntry.Folder folder) {
+	public void popServerBrowserFragment() {
+		mServerBrowserFragment = serverBrowserFragmentStack.pop();
+		mServerBrowserTab.setTabListener(new TabActionListener(mServerBrowserFragment));
+
+		showFragment(mServerBrowserFragment);
+	}
+
+	@Override
+	public void showFolderContents(final Folder folder, final boolean addToStack) {
 		showProgressSpinner();
 
 		try {
-			getRetrieveCursorTask(folder, new OnCursorRetrievedListener() {
+			getRetrieveCursorTask(folder, new CursorTaskListener() {
 				@Override
-				public void onCursorRetrieved(Cursor cursor) {
-					pushServerBrowserFragment(new ServerBrowserFragment(cursor), true);
+				public void onPreExecute() {
+					try {
+						mServerBrowserFragment.setListAdapter(null);
+						mServerBrowserFragment.setEmptyText("Downloading information from server...");
+					} catch (final IllegalStateException e) {
+						// sometimes mServerBrowserFragment hasn't had its content view created, even if it's on screen.
+						// this is pretty harmless, but, TODO: find out why and fix it instead of ignoring the exception
+					}
+				}
+
+				@Override
+				public void onProgressUpdate(final Integer... p) {
+					final CharSequence progressText = TextUtils.expandTemplate("Retrieved ^1 files/folders",
+							Integer.toString(p[0]));
+
+					try {
+						mServerBrowserFragment.setEmptyText(progressText);
+					} catch (final IllegalStateException e) {
+						// see comment for onPreExecute()
+					}
+				}
+
+				@Override
+				public void onResult(final Cursor cursor) {
+					showServerBrowserFragment(new ServerBrowserFragment(cursor, folder), addToStack);
 					hideProgressSpinner();
 				}
 
 				@Override
-				public void onException(Exception e) {
+				public void onException(final Exception e) {
 					showDialogFragment(new AlertDialogFragment(getApplicationContext(), R.string.error,
 							e.getLocalizedMessage()));
 					hideProgressSpinner();
@@ -442,5 +467,12 @@ public class SubsonicClientActivity extends SherlockFragmentActivity
 					e.getLocalizedMessage()));
 			hideProgressSpinner();
 		}
+	}
+
+	@Override
+	public void refresh(final ServerBrowserFragment sbf) {
+		final Folder f = sbf.getFolder();
+		SubsonicCaller.delete(f);
+		showFolderContents(f, false);
 	}
 }

@@ -79,7 +79,10 @@ public class DownloadService extends Service {
 		@Override
 		public void onProgressUpdate(final Download d) {
 			Outbox.postProgressUpdate(d);
-			updateNotification(d.getProgressString());
+
+			// SystemUI chokes if a notification is updated too frequently
+			if (System.currentTimeMillis() % 1000 == 0)
+				updateNotification(d.getProgressString());
 		}
 
 		@Override
@@ -225,6 +228,9 @@ public class DownloadService extends Service {
 		mNotification.contentView.setTextViewText(R.id.name, name);
 		mNotification.contentView.setTextViewText(R.id.path, path);
 
+		// clear progress text view
+		updateNotification("");
+
 		getNotificationManager().notify(R.string.download_service, mNotification);
 	}
 
@@ -314,9 +320,7 @@ public class DownloadService extends Service {
 					while ((count = input.read(data)) != -1) {
 						total += count;
 
-						// SystemUI chokes if a notification is updated too frequently
-						if (total % UPDATE_INTERVAL == 0)
-							publishProgress(total);
+						publishProgress(total);
 
 						output.write(data, 0, count);
 					}

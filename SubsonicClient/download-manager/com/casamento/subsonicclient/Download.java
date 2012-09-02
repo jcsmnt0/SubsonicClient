@@ -100,7 +100,7 @@ public class Download implements Parcelable {
 		mCompleted = in.readInt() == 1;
 	}
 
-	private enum ByteSize {
+	private static enum ByteSize {
 		KB(1L << 10),
 		MB(1L << 20),
 		GB(1L << 30),

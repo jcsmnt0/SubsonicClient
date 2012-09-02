@@ -37,6 +37,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.*;
 import android.widget.AdapterView.AdapterContextMenuInfo;
+import com.actionbarsherlock.app.ActionBar;
 import com.actionbarsherlock.app.SherlockListFragment;
 import com.actionbarsherlock.view.Menu;
 import com.actionbarsherlock.view.MenuItem;
@@ -50,29 +51,33 @@ import static com.casamento.subsonicclient.SubsonicCaller.DatabaseHelper;
 public class ServerBrowserFragment extends SherlockListFragment {
 	private static final String logTag = "ServerBrowserFragment";
 	private final Cursor mCursor;
+	private final Folder mFolder;
+
+	Folder getFolder() { return mFolder; }
 
 	private ActivityCallback mActivity;
 
 	// containing Activity must implement this interface; enforced in onAttach
 	interface ActivityCallback {
-		void pushServerBrowserFragment(Folder folder);
-		void initiateDownload(MediaFile mediaFile, boolean transcoded);
+		void showFolderContents(Folder folder, boolean addToBackStack);
+		void popServerBrowserFragment();
+		ActionBar getSupportActionBar();
+		void download(FilesystemEntry entry, boolean transcoded);
+		void refresh(ServerBrowserFragment sbf);
 	}
 
 	public ServerBrowserFragment() {
-		mCursor = null;
+		this(null, null);
 	}
 
-	ServerBrowserFragment(Cursor cursor) {
+	ServerBrowserFragment(final Cursor cursor, final Folder folder) {
 		mCursor = cursor;
+		mFolder = folder;
 	}
 
 	@Override
-	public void onAttach(Activity activity) {
+	public void onAttach(final Activity activity) {
 		super.onAttach(activity);
-
-		if (mCursor != null)
-			setListAdapter(new FilesystemEntryCursorAdapter(getSherlockActivity(), mCursor, false));
 
 		// ensure activity implements the interface this Fragment needs
 		try {
@@ -84,7 +89,7 @@ public class ServerBrowserFragment extends SherlockListFragment {
 	}
 
 	@Override
-	public void onActivityCreated(Bundle savedInstanceState) {
+	public void onActivityCreated(final Bundle savedInstanceState) {
 		super.onActivityCreated(savedInstanceState);
 
 		setHasOptionsMenu(true);
@@ -93,6 +98,15 @@ public class ServerBrowserFragment extends SherlockListFragment {
 		lv.setOnItemClickListener(filesystemEntryClickListener);
 		registerForContextMenu(lv);
 		lv.setFastScrollEnabled(true);
+
+		if (mCursor != null)
+			setListAdapter(new FilesystemEntryCursorAdapter(getSherlockActivity(), mCursor, false));
+
+		final boolean homeButtonEnabled = (mFolder != null);
+		final ActionBar ab = mActivity.getSupportActionBar();
+
+		ab.setHomeButtonEnabled(homeButtonEnabled);
+		ab.setDisplayHomeAsUpEnabled(homeButtonEnabled);
 	}
 
 	// bug fix as per https://code.google.com/p/android/issues/detail?id=19917
@@ -105,18 +119,18 @@ public class ServerBrowserFragment extends SherlockListFragment {
 	}
 
 	@Override
-	public void onCreateContextMenu(ContextMenu menu, View v, ContextMenuInfo menuInfo) {
+	public void onCreateContextMenu(final ContextMenu menu, final View v, final ContextMenuInfo menuInfo) {
 		super.onCreateContextMenu(menu, v, menuInfo);
 
-		AdapterContextMenuInfo info = (AdapterContextMenuInfo)menuInfo;
-		FilesystemEntry entry = FilesystemEntry.getInstance((Cursor) getListAdapter().getItem(info.position));
+		final AdapterContextMenuInfo info = (AdapterContextMenuInfo)menuInfo;
+		final FilesystemEntry entry = FilesystemEntry.getInstance((Cursor) getListAdapter().getItem(info.position));
 
 		menu.setHeaderTitle(entry.name);
 
 		if (entry.isFolder) {
 			getSherlockActivity().getMenuInflater().inflate(R.menu.contextmenu_folder, menu);
 		} else {
-			MediaFile mediaFile = (MediaFile)entry;
+			final MediaFile mediaFile = (MediaFile)entry;
 			getSherlockActivity().getMenuInflater().inflate(R.menu.contextmenu_file, menu);
 			menu.findItem(R.id.fileContextMenu_downloadOriginalFile).setTitle("Download Original File (" +
 					mediaFile.suffix + ")");
@@ -126,29 +140,33 @@ public class ServerBrowserFragment extends SherlockListFragment {
 	}
 
 	@Override
-	public boolean onContextItemSelected(android.view.MenuItem item) {
-		AdapterContextMenuInfo info = (AdapterContextMenuInfo)item.getMenuInfo();
-		FilesystemEntry entry = FilesystemEntry.getInstance((Cursor) getListAdapter().getItem(info.position));
+	public boolean onContextItemSelected(final android.view.MenuItem item) {
+		final AdapterContextMenuInfo info = (AdapterContextMenuInfo)item.getMenuInfo();
+		final FilesystemEntry entry = FilesystemEntry.getInstance((Cursor) getListAdapter().getItem(info.position));
 
 		if (entry.isFolder) {
-			Folder folder = (Folder)entry;
+			final Folder folder = (Folder)entry;
 
 			switch (item.getItemId()) {
 				case R.id.folderContextMenu_downloadOriginal:
-					//downloadFolder(folder, false);
+					mActivity.download(folder, false);
 					break;
 
 				case R.id.folderContextMenu_downloadTranscoded:
-					//downloadFolder(folder, true);
+					mActivity.download(folder, true);
+					break;
+
+				default:
+					super.onContextItemSelected(item);
 					break;
 			}
 		} else {
-			MediaFile mediaFile = (MediaFile)entry;
+			final MediaFile mediaFile = (MediaFile)entry;
 
-			switch(item.getItemId()) {
+			switch (item.getItemId()) {
 				case R.id.fileContextMenu_downloadOriginalFile:
 					try {
-						mActivity.initiateDownload(mediaFile, false);
+						mActivity.download(mediaFile, false);
 					} catch (Exception e) {
 						// TODO: better exception handling
 						Log.e(logTag, e.toString());
@@ -157,7 +175,7 @@ public class ServerBrowserFragment extends SherlockListFragment {
 
 				case R.id.fileContextMenu_downloadTranscodedFile:
 					try {
-						mActivity.initiateDownload(mediaFile, true);
+						mActivity.download(mediaFile, true);
 					} catch (Exception e) {
 						Log.e(logTag, e.toString());
 					}
@@ -172,6 +190,10 @@ public class ServerBrowserFragment extends SherlockListFragment {
 //						Log.e(logTag, e.toString());
 //					}
 					break;
+
+				default:
+					super.onContextItemSelected(item);
+					break;
 			}
 		}
 
@@ -180,13 +202,18 @@ public class ServerBrowserFragment extends SherlockListFragment {
 
 	@Override
 	public void onPrepareOptionsMenu(final Menu menu) {
+		getSherlockActivity().getSupportMenuInflater().inflate(R.menu.optionsmenu_server_browser, menu);
 	}
 
 	@Override
 	public boolean onOptionsItemSelected(final MenuItem item) {
 		switch (item.getItemId()) {
 			case android.R.id.home:
-				// TODO: make the home button go up one folder
+				mActivity.popServerBrowserFragment();
+				return true;
+
+			case R.id.refresh:
+				mActivity.refresh(this);
 				return true;
 
 			default:
@@ -196,10 +223,10 @@ public class ServerBrowserFragment extends SherlockListFragment {
 
 	private OnItemClickListener filesystemEntryClickListener = new OnItemClickListener() {
 		@Override
-		public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
-			FilesystemEntry entry = SubsonicCaller.getFilesystemEntry((Integer) view.getTag());
+		public void onItemClick(final AdapterView<?> adapterView, final View view, final int i, final long l) {
+			final FilesystemEntry entry = SubsonicCaller.getFilesystemEntry((Integer) view.getTag());
 			if (entry.isFolder)
-				mActivity.pushServerBrowserFragment((Folder) entry);
+				mActivity.showFolderContents((Folder) entry, true);
 		}
 	};
 
@@ -208,7 +235,7 @@ public class ServerBrowserFragment extends SherlockListFragment {
 		private final int idCol, nameCol;
 		private final AlphabetIndexer indexer;
 
-		public FilesystemEntryCursorAdapter(Context context, Cursor c, boolean autoRequery) {
+		private FilesystemEntryCursorAdapter(final Context context, final Cursor c, final boolean autoRequery) {
 			super(context, c, autoRequery);
 
 			indexer = new AlphabetIndexer(c, c.getColumnIndex(DatabaseHelper.NAME.name), "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
@@ -219,25 +246,25 @@ public class ServerBrowserFragment extends SherlockListFragment {
 		}
 
 		@Override
-		public View newView(Context context, Cursor cursor, ViewGroup viewGroup) {
+		public View newView(final Context context, final Cursor cursor, final ViewGroup viewGroup) {
 			return inflater.inflate(R.layout.music_folder_row_layout, viewGroup, false);
 		}
 
 		@Override
-		public void bindView(View view, Context context, Cursor cursor) {
-			TextView tv = (TextView)view.findViewById(R.id.label);
+		public void bindView(final View view, final Context context, final Cursor cursor) {
+			final TextView tv = (TextView)view.findViewById(R.id.label);
 			tv.setText(cursor.getString(nameCol));
 			// set the subsonic ID as the view's tag
 			view.setTag(cursor.getInt(idCol));
 		}
 
 		@Override
-		public int getPositionForSection(int section) {
+		public int getPositionForSection(final int section) {
 			return indexer.getPositionForSection(section);
 		}
 
 		@Override
-		public int getSectionForPosition(int section) {
+		public int getSectionForPosition(final int section) {
 			return indexer.getSectionForPosition(section);
 		}
 

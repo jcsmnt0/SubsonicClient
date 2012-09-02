@@ -42,6 +42,7 @@ import java.text.ParseException;
 import java.util.HashMap;
 import java.util.Map;
 
+import static com.casamento.subsonicclient.FilesystemEntry.Folder;
 import static com.casamento.subsonicclient.SubsonicCaller.DatabaseHelper.*;
 
 class SubsonicCaller extends RestCaller {
@@ -50,7 +51,6 @@ class SubsonicCaller extends RestCaller {
 	private static final String logTag = "SubsonicCaller";
 	private static String mServerUrl, mUsername, mPassword;
 	private static Map<String, String> mRequiredParams;
-	private static Activity mActivity;
 	private static DatabaseHelper mDatabaseHelper;
 
 	static String getUsername() {
@@ -268,7 +268,7 @@ class SubsonicCaller extends RestCaller {
 		static final String CHANGE_USER_PASSWORD = "changePassword.view";
 	}
 
-	protected static interface OnPingResponseListener {
+	protected static interface PingResponseListener {
 		void onPingResponse(final boolean ok);
 	}
 
@@ -358,17 +358,22 @@ class SubsonicCaller extends RestCaller {
 		private DatabaseHelper(Context context) {
 			super(context, DATABASE_NAME, null, DATABASE_VERSION);
 			SQLiteDatabase db = getWritableDatabase();
-			db.execSQL("drop table if exists " + TABLE_NAME + ";");
+			//db.execSQL("drop table if exists " + TABLE_NAME + ";");
 			db.execSQL(getCreateCommand());
 		}
 
-		Cursor query(String whereClause) {
-			String orderByClause = NAME.name + " collate nocase";
+		Cursor query(final String whereClause) {
+			final String orderByClause = NAME.name + " collate nocase";
 			return getReadableDatabase().query(TABLE_NAME, getColumnNames(), whereClause, null, null, null, orderByClause);
 		}
 
-		long insert(ContentValues values) {
+		long insert(final ContentValues values) {
 			return getWritableDatabase().insertOrThrow(TABLE_NAME, null, values);
+		}
+
+		int delete(final Folder f) {
+			final String[] id = new String[] { Integer.toString(f == null ? Folder.NULL_ID : f.id) };
+			return getWritableDatabase().delete(TABLE_NAME, PARENT_FOLDER.name + "=?", id);
 		}
 
 		@Override
@@ -397,14 +402,17 @@ class SubsonicCaller extends RestCaller {
 		return FilesystemEntry.getInstance(cursor);
 	}
 
+	static void delete(final Folder f) {
+		mDatabaseHelper.delete(f);
+	}
+
 	static void setServerDetails(final String serverUrl, final String username, final String password,
 			final Activity activity) {
 		mServerUrl = serverUrl + "/rest";
 		mUsername = username;
 		mPassword = password;
 
-		mActivity = activity;
-		mDatabaseHelper = getInstance(mActivity);
+		mDatabaseHelper = getInstance(activity);
 
 		mRequiredParams = new HashMap<String, String>();
 		mRequiredParams.put("v", SubsonicCaller.API_VERSION);
@@ -424,11 +432,20 @@ class SubsonicCaller extends RestCaller {
 		return jResponse;
 	}
 
-	static void ping(final OnPingResponseListener callbackListener) throws UnsupportedEncodingException, MalformedURLException, URISyntaxException {
-		new RetrieveRestResponseTask(buildRestCall(mServerUrl, Methods.PING, mRequiredParams), mUsername, mPassword,
-				new OnRestResponseListener() {
+	static void ping(final PingResponseListener callbackListener) throws UnsupportedEncodingException, MalformedURLException, URISyntaxException {
+		final String restCall = buildRestCall(mServerUrl, Methods.PING, mRequiredParams);
+
+		new RestResponseTask(restCall, mUsername, mPassword, new RestTaskListener() {
 			@Override
-			public void onRestResponse(String responseStr) {
+			public void onPreExecute() {
+			}
+
+			@Override
+			public void onProgressUpdate(Void... p) {
+			}
+
+			@Override
+			public void onResult(String responseStr) {
 				boolean ok;
 
 				try {
@@ -449,22 +466,22 @@ class SubsonicCaller extends RestCaller {
 		}).execute((Void) null);
 	}
 
-	static interface OnCursorRetrievedListener {
-		void onCursorRetrieved(Cursor cursor);
+	static interface AsyncTaskListener<Progress, Result> {
+		void onPreExecute();
+		void onProgressUpdate(Progress... p);
+		void onResult(Result r);
 		void onException(Exception e);
 	}
 
-	static interface OnRestResponseListener {
-		void onRestResponse(String responseStr);
-		void onException(Exception e);
-	}
+	static interface RestTaskListener extends AsyncTaskListener<Void, String> {}
+	static interface CursorTaskListener extends AsyncTaskListener<Integer, Cursor> {}
 
-	static class RetrieveRestResponseTask extends RestCallTask<Void, Void, String> {
+	static class RestResponseTask extends RestCallTask<Void, Void, String> {
 		private final String mUrl, mUsername, mPassword;
-		private OnRestResponseListener mCallbackListener;
+		private RestTaskListener mCallbackListener;
 
-		RetrieveRestResponseTask(final String url, final String username, final String password,
-				final OnRestResponseListener callbackListener) {
+		RestResponseTask(final String url, final String username, final String password,
+		         final RestTaskListener callbackListener) {
 			mUrl = url;
 			mUsername = username;
 			mPassword = password;
@@ -484,23 +501,18 @@ class SubsonicCaller extends RestCaller {
 		@Override
 		protected void onPostExecute(String response) {
 			if (response != null)
-				mCallbackListener.onRestResponse(response);
+				mCallbackListener.onResult(response);
 		}
 	}
 
-	static class RetrieveCursorTask extends RestCallTask<Void, Integer, Cursor> {
-		private final static String logTag = "RetrieveCursorTask";
-		private final FilesystemEntry.Folder mFolder;
-		private final OnCursorRetrievedListener mCallbackListener;
+	static class CursorTask extends RestCallTask<Void, Integer, Cursor> {
+		private final static String logTag = "CursorTask";
+		private final Folder mFolder;
+		private final CursorTaskListener mCallbackListener;
 		private int entriesInserted = 0;
 
-		// this one is to get the list of top-level folders
-		RetrieveCursorTask(OnCursorRetrievedListener callbackListener) {
-			mFolder = null;
-			mCallbackListener = callbackListener;
-		}
-
-		RetrieveCursorTask(FilesystemEntry.Folder folder, OnCursorRetrievedListener callbackListener) {
+		// if folder is null, the top-level folders are retrieved
+		CursorTask(final Folder folder, final CursorTaskListener callbackListener) {
 			mFolder = folder;
 			mCallbackListener = callbackListener;
 		}
@@ -517,6 +529,18 @@ class SubsonicCaller extends RestCaller {
 			entry.parentId = parentId;
 			mDatabaseHelper.insert(entry.getContentValues());
 			publishProgress(++entriesInserted);
+		}
+
+		@Override
+		protected void onPreExecute() {
+			super.onPreExecute();
+			mCallbackListener.onPreExecute();
+		}
+
+		@Override
+		protected void onProgressUpdate(Integer... foldersProcessed) {
+			super.onProgressUpdate(foldersProcessed);
+			mCallbackListener.onProgressUpdate(foldersProcessed);
 		}
 
 		@Override
@@ -542,8 +566,8 @@ class SubsonicCaller extends RestCaller {
 					int jFolderArrayLength = jFolderArray.length();
 					for (int i = 0; i < jFolderArrayLength; i++) {
 						JSONObject jFolder = jFolderArray.getJSONObject(i);
-						FilesystemEntry.Folder folder = new FilesystemEntry.Folder(-jFolder.getInt("id"),
-								jFolder.getString("name"), mFolder != null ? mFolder.id : Integer.MIN_VALUE);
+						Folder folder = new Folder(-jFolder.getInt("id"),
+								jFolder.getString("name"), mFolder != null ? mFolder.id : Folder.NULL_ID);
 						mDatabaseHelper.insert(folder.getContentValues());
 						publishProgress(++entriesInserted);
 					}
@@ -624,7 +648,7 @@ class SubsonicCaller extends RestCaller {
 
 		@Override
 		protected void onPostExecute(Cursor cursor) {
-			mCallbackListener.onCursorRetrieved(cursor);
+			mCallbackListener.onResult(cursor);
 		}
 	}
 

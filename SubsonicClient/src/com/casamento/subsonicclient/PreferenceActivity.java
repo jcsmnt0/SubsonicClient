@@ -1,7 +1,6 @@
 /*
  * Copyright (c) 2012, Joseph Casamento
  * All rights reserved.
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -69,7 +68,7 @@ public class PreferenceActivity extends SherlockPreferenceActivity implements On
 
 				try {
 					SubsonicCaller.setServerDetails(serverUrl, username, password, self);
-					SubsonicCaller.ping(new SubsonicCaller.OnPingResponseListener() {
+					SubsonicCaller.ping(new SubsonicCaller.PingResponseListener() {
 						@Override
 						public void onPingResponse(boolean ok) {
 							testConnection.setSummary(ok ? getString(R.string.success) : getString(R.string.failure));

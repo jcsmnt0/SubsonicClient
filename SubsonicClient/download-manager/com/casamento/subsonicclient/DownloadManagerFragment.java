@@ -168,6 +168,14 @@ public class DownloadManagerFragment extends SherlockListFragment {
 			super(context, R.layout.download_row_layout, new ArrayList<Download>());
 		}
 
+		// addAll doesn't exist in Android pre-3.0
+		@Override
+		public void addAll(Collection<? extends Download> collection) {
+			for (final Download d : collection) {
+				add(d);
+			}
+		}
+
 		@Override
 		public View getView(int position, View convertView, ViewGroup parent) {
 			final ViewHolder holder;
@@ -189,9 +197,17 @@ public class DownloadManagerFragment extends SherlockListFragment {
 
 			final Download d = getItem(position);
 
-			holder.name.setText(d.name);
-			holder.path.setText(d.savePath);
-			holder.progressView.setText(d.getProgressString());
+			// I'm coming to realize that you can never count on anything's existence in Android, even if you
+			// explicitly created it like ten seconds ago
+
+			if (holder.name != null)
+				holder.name.setText(d.name);
+
+			if (holder.path != null)
+				holder.path.setText(d.savePath);
+
+			if (holder.progressView != null)
+				holder.progressView.setText(d.getProgressString());
 
 			return convertView;
 		}

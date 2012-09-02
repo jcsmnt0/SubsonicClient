@@ -2,7 +2,6 @@
 <!--
   ~ Copyright (c) 2012, Joseph Casamento
   ~ All rights reserved.
-  ~
   ~ Redistribution and use in source and binary forms, with or without
   ~ modification, are permitted provided that the following conditions are met:
   ~
@@ -84,5 +83,7 @@
     <string name="download_service_content_title">SubsonicClient</string>
     <string name="download_service_content_text">Downloading files</string>
     <string name="download_service">Download service started</string>
+    <string name="server_not_set_up">The server details have not been set up.</string>
+    <string name="refresh">Refresh</string>
 
 </resources>
