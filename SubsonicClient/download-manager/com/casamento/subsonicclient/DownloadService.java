@@ -25,323 +25,341 @@
 package com.casamento.subsonicclient;
 
 import android.app.Notification;
-import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
-import android.os.*;
+import android.os.Binder;
+import android.os.IBinder;
 import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 import android.widget.RemoteViews;
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpResponse;
-import org.apache.http.auth.UsernamePasswordCredentials;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.auth.BasicScheme;
-import org.apache.http.impl.client.DefaultHttpClient;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
-import java.util.List;
+import java.util.Collection;
+import java.util.LinkedList;
 
 public class DownloadService extends Service {
-	private static final String logTag = "SubsonicClient/DownloadService";
-	private static final List<Messenger> mClients = new ArrayList<Messenger>();
-
-	// TODO: there's probably a more efficient data structure for this purpose
-	private static final ArrayList<Download> mDownloads = new ArrayList<Download>();
-
-	private static AsyncTask mCurrentTask;
-
-	private Notification mNotification;
-
-	static enum IncomingMessages {
-		REGISTER_CLIENT,
-		UNREGISTER_CLIENT,
-		INITIATE_DOWNLOAD,
-	}
-
-	static enum OutgoingMessages {
-		DOWNLOAD_ADDED,
-		DOWNLOAD_STARTED,
-		DOWNLOAD_PROGRESS_UPDATED,
-		DOWNLOAD_COMPLETED,
-	}
-
-	private final DownloadTask.Listener mDownloadTaskListener = new DownloadTask.Listener() {
-		@Override
-		public void onStart(final Download d) {
-			Outbox.postStart(d);
-			updateNotification(d.name, d.savePath);
-		}
-
-		@Override
-		public void onProgressUpdate(final Download d) {
-			Outbox.postProgressUpdate(d);
-
-			// SystemUI chokes if a notification is updated too frequently
-			if (System.currentTimeMillis() % 1000 == 0)
-				updateNotification(d.getProgressString());
-		}
-
-		@Override
-		public void onCompletion(final Download d) {
-			Outbox.postCompletion(d);
-			mDownloads.remove(d);
-
-			// start the next download, if there is one
-			if (mDownloads.size() > 0)
-				startDownload(mDownloads.get(0));
-			else {
-				mCurrentTask = null;
-				cancelNotification();
-			}
-		}
-	};
-
-	private static class Outbox {
-		private static void postAddition(final Download d) {
-			final Bundle data = new Bundle();
-			data.putParcelable("download", d);
-
-			postMessage(OutgoingMessages.DOWNLOAD_ADDED, data);
-		}
-
-		private static void postStart(final Download d) {
-			final Bundle data = new Bundle();
-			//data.putParcelable("download", d);
-			data.putString("url", d.url);
-
-			postMessage(OutgoingMessages.DOWNLOAD_STARTED, data);
-		}
-
-		private static void postProgressUpdate(final Download d) {
-			final Bundle data = new Bundle();
-			//data.putParcelable("download", d);
-			data.putString("url", d.url);
-			data.putLong("progress", d.progress);
-
-			postMessage(OutgoingMessages.DOWNLOAD_PROGRESS_UPDATED, data);
-		}
-
-		private static void postCompletion(final Download d) {
-			final Bundle data = new Bundle();
-			//data.putParcelable("download", d);
-			data.putString("url", d.url);
-
-			postMessage(OutgoingMessages.DOWNLOAD_COMPLETED, data);
-		}
-
-		private static void postMessage(OutgoingMessages messageType, Bundle msgData) {
-			final Message msg = Message.obtain(null, messageType.ordinal());
-			msg.setData(msgData);
-
-			for (final Messenger client : mClients) {
-				try {
-					client.send(msg);
-				} catch (RemoteException e) {
-					mClients.remove(client);
-				}
-			}
-		}
-	}
-
-	private final Messenger mInbox = new Messenger(new Handler() {
-		@Override
-		public void handleMessage(final Message msg) {
-			final Bundle msgData = msg.getData();
+    private static final String logTag = "SubsonicClient/DownloadService";
+    private static final Collection<Listener> mListeners = new ArrayList<Listener>();
+
+    private static final LinkedList<Download> mPendingDownloads = new LinkedList<Download>();
+
+    private static DownloadTask mCurrentTask;
+    private Notification mNotification;
+
+    static class Download {
+        private boolean mStarted = false, mCompleted = false, mCancelled = false;
+        private long mProgress;
+
+        final String url, name, savePath, username, password;
+
+        @Override
+        public boolean equals(final Object o) {
+            return (o instanceof Download && ((Download) o).url.equals(url));
+        }
+
+        private void setStarted()   { mStarted = true;   }
+        private void setCompleted() { mCompleted = true; }
+        private void setCancelled() { mCancelled = true; }
+
+        private void setProgress(final long progress) {
+            mProgress = progress;
+        }
+
+        boolean isStarted()   { return mStarted;   }
+        boolean isCompleted() { return mCompleted; }
+        boolean isCancelled() { return mCancelled; }
+
+        long getProgress() {
+            return mProgress;
+        }
+
+        private Download(final String url, final String name, final String savePath, final String username,
+                final String password) {
+            this.url = url;
+            this.name = name;
+            this.savePath = savePath;
+            this.username = username;
+            this.password = password;
+        }
+
+        private final long KB = 1L << 10, MB = KB << 10, GB = MB << 10, TB = GB << 10;
+
+        String getProgressString() {
+            if (mProgress >= TB)
+                    return String.format("%.2fTB", (double) mProgress / TB);
+                else if (mProgress >= GB)
+                    return String.format("%.2fGB", (double) mProgress / GB);
+                else if (mProgress >= MB)
+                    return String.format("%.2fMB", (double) mProgress / MB);
+                else if (mProgress >= KB)
+                    return String.format("%.2fKB", (double) mProgress / KB);
+                else
+                    return String.format("%dB", mProgress);
+        }
+    }
+
+    interface Listener {
+        void onAddition(Download download);
+        void onStart(Download download);
+        void onProgressUpdate(Download download);
+        void onCompletion(Download download);
+        void onCancellation(Download download);
+    }
+
+    static class Adapter implements Listener {
+        @Override public void onAddition(final Download download)       { /* do nothing */ }
+        @Override public void onStart(final Download download)          { /* do nothing */ }
+        @Override public void onProgressUpdate(final Download download) { /* do nothing */ }
+        @Override public void onCompletion(final Download download)     { /* do nothing */ }
+        @Override public void onCancellation(final Download download)   { /* do nothing */ }
+    }
+
+    class ServiceBinder extends Binder {
+        DownloadService getService() { return DownloadService.this; }
+    }
+
+    private final IBinder mBinder = new ServiceBinder();
+
+    @Override
+    public IBinder onBind(final Intent intent) {
+        return mBinder;
+    }
+
+    @Override
+    public int onStartCommand(final Intent intent, final int flags, final int startId) {
+        return START_STICKY;
+    }
+
+    void registerListener(final Listener listener) {
+        mListeners.add(listener);
+    }
+
+    void unregisterListener(final Listener listener) {
+        mListeners.remove(listener);
+    }
+
+    void queue(final String url, final String name, final String savePath, final String username,
+            final String password) {
+        final Download d = new Download(url, name, savePath, username, password);
+
+        if (!mPendingDownloads.contains(d)) {
+            for (final Listener dl : mListeners)
+                dl.onAddition(d);
+
+            mPendingDownloads.addLast(d);
+
+            if (!isDownloading())
+                startDownload(d);
+        }
+    }
+
+    // TODO: fix this
+    void cancel(final Download d) {
+        d.setCancelled();
+
+        for (final Listener l : mListeners)
+            l.onCancellation(d);
+
+        if (mCurrentTask.getDownload().equals(d)) {
+            mCurrentTask.cancel(true);
+            startNextOrSleep();
+        } else
+            mPendingDownloads.remove(d);
+    }
+
+    boolean isDownloading() {
+        return mCurrentTask != null;
+    }
+
+    Collection<Download> getPendingDownloads() {
+        return mPendingDownloads;
+    }
+
+    private void startNextOrSleep() {
+        mPendingDownloads.removeFirst();
+
+        if (mPendingDownloads.isEmpty()) {
+            mCurrentTask = null;
+            cancelNotification();
+        } else
+            startDownload(mPendingDownloads.getFirst());
+    }
+
+    private final Listener mDownloadTaskListener = new Adapter() {
+	    private static final int UPDATE_RATE = 1000;
+        private long lastUpdateTime = 0;
+
+        @Override
+        public void onStart(final Download d) {
+            updateNotification(d.name, d.savePath);
+        }
+
+        @Override
+        public void onProgressUpdate(final Download d) {
+            // SystemUI chokes if a notification is updated too frequently
+            final long currentTime = System.currentTimeMillis();
+            if (currentTime - lastUpdateTime > UPDATE_RATE) {
+                updateNotification(d.getProgressString());
+                lastUpdateTime = currentTime;
+            }
+        }
+
+        @Override
+        public void onCompletion(final Download d) {
+            startNextOrSleep();
+        }
+
+        @Override
+        public void onCancellation(final Download d) {
+            startNextOrSleep();
+        }
+    };
+
+    private void startDownload(final Download d) {
+        mCurrentTask = (DownloadTask) new DownloadTask(d).execute();
+    }
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+
+        mNotification = createNotification();
+        mListeners.add(mDownloadTaskListener);
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+
+        if (mCurrentTask != null)
+            mCurrentTask.cancel(true);
+
+        mPendingDownloads.clear();
+
+        cancelNotification();
+    }
+
+    private void updateNotification(final CharSequence progress) {
+        mNotification.contentView.setTextViewText(R.id.progress, progress);
+
+        startForeground(R.string.download_service, mNotification);
+    }
+
+    private void updateNotification(final CharSequence name, final CharSequence path) {
+        mNotification.contentView.setTextViewText(R.id.name, name);
+        mNotification.contentView.setTextViewText(R.id.path, path);
+
+        // clear progress text view
+        updateNotification("");
+    }
+
+    private void cancelNotification() {
+        stopForeground(true);
+    }
+
+    private Notification createNotification() {
+        final Intent notificationIntent = new Intent(this, MainActivity.class);
+        final PendingIntent contentIntent = PendingIntent.getActivity(this, 0, notificationIntent,
+                PendingIntent.FLAG_CANCEL_CURRENT);
+
+        final RemoteViews contentView = new RemoteViews(getPackageName(), R.layout.download_notification_layout);
+        contentView.setImageViewResource(R.id.icon, R.drawable.ic_action_download);
+
+        return new NotificationCompat.Builder(this)
+                .setContentIntent(contentIntent)
+                .setSmallIcon(R.drawable.ic_action_download)
+                .setWhen(System.currentTimeMillis())
+                .setAutoCancel(false)
+                .setOngoing(true)
+                .setContent(contentView)
+                .getNotification();
+    }
+
+    private static class DownloadTask extends RestCaller.DataRetrievalTask<Void, Long, Download> {
+        private static final String logTag = "DownloadTask";
+        private static final int BUFFER_SIZE = 1024;
+
+        private final Download mDownload;
+
+        private DownloadTask(final Download download) {
+            mDownload = download;
+        }
+
+        Download getDownload() {
+            return mDownload;
+        }
+
+        @Override
+        protected void onPreExecute() {
+            super.onPreExecute();
+
+            mDownload.setStarted();
+
+            for (final Listener dl : mListeners)
+                dl.onStart(mDownload);
+        }
+
+        @Override
+        protected void onProgressUpdate(final Long... progress) {
+            super.onProgressUpdate(progress);
+
+            mDownload.setProgress(progress[0]);
+
+            for (final Listener dl : mListeners)
+                dl.onProgressUpdate(mDownload);
+        }
+
+        @Override
+        protected Download doInBackground(final Void... params) {
+            try {
+                final String savePath = mDownload.savePath;
+
+                final InputStream input = getStream(mDownload.url, mDownload.username, mDownload.password);
+                final File outDir = new File(savePath.substring(0, savePath.lastIndexOf("/")));
+
+                outDir.mkdirs();
+
+                final OutputStream output = new FileOutputStream(savePath);
+
+                final byte[] data = new byte[BUFFER_SIZE];
+                long total = 0;
+                int count;
+
+                while (!isCancelled() && (count = input.read(data)) != -1) {
+                    total += count;
+                    publishProgress(total);
+                    output.write(data, 0, count);
+                }
+
+                output.flush();
+                output.close();
+                input.close();
+            } catch (final Exception e) {
+                Log.e(logTag, "Error", e);
+            }
+
+            return mDownload;
+        }
+
+        @Override
+        protected void onPostExecute(final Download d) {
+            super.onPostExecute(d);
+
+            d.setCompleted();
+
+            for (final Listener dl : mListeners)
+                dl.onCompletion(d);
+        }
+
+        @Override
+        protected void onCancelled(final Download d) {
+            new File(d.savePath).delete();
+        }
+    }
 
-			switch (IncomingMessages.values()[msg.what]) {
-				case REGISTER_CLIENT:
-					mClients.add(msg.replyTo);
-					break;
-
-				case UNREGISTER_CLIENT:
-					mClients.remove(msg.replyTo);
-					break;
-
-				case INITIATE_DOWNLOAD:
-					final String url = msgData.getString("url");
-					final String name = msgData.getString("name");
-					final String savePath = msgData.getString("savePath");
-					final String username = msgData.getString("username");
-					final String password = msgData.getString("password");
-
-					final Download d = new Download(url, name, savePath, username, password);
-
-					mDownloads.add(d);
-					Outbox.postAddition(d);
-
-					// if d is the only download in the queue, start it; otherwise, it'll be started when the
-					// current download is finished
-					if (mDownloads.size() == 1)
-						startDownload(d);
-
-					break;
-
-				default:
-					super.handleMessage(msg);
-			}
-		}
-	});
-
-	private void startDownload(final Download d) {
-		mCurrentTask = new DownloadTask(d, mDownloadTaskListener).execute();
-	}
-
-	@Override
-	public void onCreate() {
-		super.onCreate();
-
-		mNotification = createNotification();
-	}
-
-	@Override
-	public void onDestroy() {
-		super.onDestroy();
-
-		if (mCurrentTask != null)
-			mCurrentTask.cancel(true);
-
-		mDownloads.clear();
-
-		cancelNotification();
-	}
-
-	@Override
-	public IBinder onBind(Intent intent) {
-		return mInbox.getBinder();
-	}
-
-	private NotificationManager getNotificationManager() {
-		return (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-	}
-
-	private void updateNotification(final String progress) {
-		mNotification.contentView.setTextViewText(R.id.progress, progress);
-
-		getNotificationManager().notify(R.string.download_service, mNotification);
-	}
-
-	private void updateNotification(String name, String path) {
-		mNotification.contentView.setTextViewText(R.id.name, name);
-		mNotification.contentView.setTextViewText(R.id.path, path);
-
-		// clear progress text view
-		updateNotification("");
-
-		getNotificationManager().notify(R.string.download_service, mNotification);
-	}
-
-	private void cancelNotification() {
-		getNotificationManager().cancel(R.string.download_service);
-	}
-
-	private Notification createNotification() {
-		final Intent notificationIntent = new Intent(this, SubsonicClientActivity.class);
-		final PendingIntent contentIntent = PendingIntent.getActivity(this, 0, notificationIntent,
-				PendingIntent.FLAG_CANCEL_CURRENT);
-
-		final RemoteViews contentView = new RemoteViews(getPackageName(), R.layout.download_notification_layout);
-		contentView.setImageViewResource(R.id.icon, R.drawable.ic_action_download);
-
-		return new NotificationCompat.Builder(this)
-				.setContentIntent(contentIntent)
-				.setSmallIcon(R.drawable.ic_action_download)
-				.setWhen(System.currentTimeMillis())
-				.setAutoCancel(false)
-				.setOngoing(true)
-				.setContent(contentView)
-				.getNotification();
-	}
-
-	static class DownloadTask extends AsyncTask<Void, Long, String> {
-		private final static String logTag = "DownloadTask";
-		private final static int UPDATE_INTERVAL = 1 * (int) Math.pow(1024, 2);
-
-		private final Download mDownload;
-		private final Listener mListener;
-
-		private interface Listener {
-			void onStart(Download d);
-			void onProgressUpdate(Download d);
-			void onCompletion(Download d);
-		}
-
-		private DownloadTask(Download download, Listener listener) {
-			mDownload = download;
-			mListener = listener;
-		}
-
-		@Override
-		protected void onPreExecute() {
-			super.onPreExecute();
-
-			mDownload.setStarted();
-			mListener.onStart(mDownload);
-		}
-
-		@Override
-		protected void onProgressUpdate(Long... progress) {
-			super.onProgressUpdate(progress);
-
-			Log.v(logTag, Long.toString(progress[0]));
-
-			mDownload.progress = progress[0];
-			mListener.onProgressUpdate(mDownload);
-		}
-
-		@Override
-		protected String doInBackground(Void... params) {
-			try {
-				final HttpClient httpClient = new DefaultHttpClient();
-				final HttpGet httpGet = new HttpGet(mDownload.url);
-
-				UsernamePasswordCredentials creds = new UsernamePasswordCredentials(mDownload.username,
-						mDownload.password);
-				httpGet.addHeader(new BasicScheme().authenticate(creds, httpGet));
-
-				final HttpResponse response = httpClient.execute(httpGet);
-				final HttpEntity entity = response.getEntity();
-
-				if (entity != null) {
-					String savePath = mDownload.savePath;
-
-					InputStream input = new BufferedInputStream(entity.getContent());
-					File outDir = new File(savePath.substring(0, savePath.lastIndexOf("/")));
-					outDir.mkdirs();
-					OutputStream output = new FileOutputStream(savePath);
-
-					final byte data[] = new byte[1024];
-					long total = 0;
-					int count;
-
-					while ((count = input.read(data)) != -1) {
-						total += count;
-
-						publishProgress(total);
-
-						output.write(data, 0, count);
-					}
-					output.flush();
-					output.close();
-					input.close();
-				}
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-			return null;
-		}
-
-		@Override
-		protected void onPostExecute(String s) {
-			super.onPostExecute(s);
-
-			mDownload.setCompleted();
-
-			if (mListener != null)
-				mListener.onCompletion(mDownload);
-		}
-	}
 }

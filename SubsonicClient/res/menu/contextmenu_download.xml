@@ -26,12 +26,8 @@
 
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <item android:id="@+id/folderContextMenu_downloadOriginal"
-          android:icon="@drawable/ic_action_download"
-          android:title="@string/download_original"/>
-
-    <item android:id="@+id/folderContextMenu_downloadTranscoded"
-          android:icon="@drawable/ic_action_rocket"
-          android:title="@string/download_transcoded"/>
+    <item android:id="@+id/cancel"
+          android:icon="@drawable/ic_action_cancel"
+          android:title="@string/cancel" />
 
 </menu>

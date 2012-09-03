@@ -1,7 +1,6 @@
 /*
  * Copyright (c) 2012, Joseph Casamento
  * All rights reserved.
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -37,31 +36,31 @@ import java.util.Date;
 
 // convenience methods
 public final class Util {
-	public static Calendar getDateFromString(final String dateStr) {
-		if (TextUtils.isEmpty(dateStr))
-			return null;
-		
-		Calendar c = Calendar.getInstance();
-		DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'hh:mm:ss");
-		Date d = null;
-		try {
-			d = formatter.parse(dateStr);
-		} catch (ParseException e) { // this shouldn't ever happen
-			e.printStackTrace();
-			Log.wtf("Subsonic date problem", e.getLocalizedMessage());
-		}
-		c.setTime(d);
-		return c;
-	}
+    public static Calendar getDateFromString(final String dateStr) {
+        if (TextUtils.isEmpty(dateStr))
+            return null;
 
-	public static String getStringFromDate(final Calendar date) {
-		if (date == null) return "";
-		DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'hh:mm:ss");
-		return formatter.format(date.getTime());
-	}
-	
-	public static String fixHTML(final String toFix) {
-		if (toFix == null) return null;
-		return Html.fromHtml(toFix).toString();
-	}
+        final Calendar c = Calendar.getInstance();
+        final DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'hh:mm:ss");
+        Date d = null;
+        try {
+            d = formatter.parse(dateStr);
+        } catch (ParseException e) { // this shouldn't ever happen
+            e.printStackTrace();
+            Log.wtf("Subsonic date problem", e.getLocalizedMessage());
+        }
+        c.setTime(d);
+        return c;
+    }
+
+    public static String getStringFromDate(final Calendar date) {
+        if (date == null) return "";
+        final DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'hh:mm:ss");
+        return formatter.format(date.getTime());
+    }
+
+    public static String fixHTML(final String toFix) {
+        if (toFix == null) return null;
+        return Html.fromHtml(toFix).toString();
+    }
 }

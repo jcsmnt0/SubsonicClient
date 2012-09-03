@@ -36,94 +36,98 @@ import com.actionbarsherlock.app.SherlockPreferenceActivity;
 import java.util.Arrays;
 
 public class PreferenceActivity extends SherlockPreferenceActivity implements OnSharedPreferenceChangeListener {
-	final PreferenceActivity self = this;
+    final PreferenceActivity self = this;
 
-	@SuppressWarnings("deprecation")
-	@Override
-	protected void onCreate(final Bundle savedInstanceState) {
-		super.onCreate(savedInstanceState);
+    @SuppressWarnings("deprecation")
+    @Override
+    protected void onCreate(final Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
 
-		addPreferencesFromResource(R.xml.server_prefs);
+        addPreferencesFromResource(R.xml.server_prefs);
 
-		final Preference testConnection = this.findPreference("testConnection");
-		testConnection.setOnPreferenceClickListener(new OnPreferenceClickListener() {
-			public boolean onPreferenceClick(Preference preference) {
-				SharedPreferences prefs = getPreferenceManager().getSharedPreferences();
+        final Preference testConnection = findPreference("testConnection");
+        testConnection.setOnPreferenceClickListener(new OnPreferenceClickListener() {
+            public boolean onPreferenceClick(final Preference preference) {
+                final SharedPreferences prefs = getPreferenceManager().getSharedPreferences();
 
-				final String serverUrl, username, password;
-				if ((serverUrl = prefs.getString("serverUrl", "")).equals("")) {
-					testConnection.setSummary(getString(R.string.missing_server_url));
-					return true;
-				}
-				if ((username = prefs.getString("username", "")).equals("")) {
-					testConnection.setSummary(getString(R.string.missing_username));
-					return true;
-				}
-				if ((password = prefs.getString("password", "")).equals("")) {
-					testConnection.setSummary(getString(R.string.missing_password));
-					return true;
-				}
+                final String serverUrl;
+                if ((serverUrl = prefs.getString("serverUrl", "")).equals("")) {
+                    testConnection.setSummary(getString(R.string.missing_server_url));
+                    return true;
+                }
 
-				testConnection.setSummary(getString(R.string.testing_connection));
+                final String username;
+                if ((username = prefs.getString("username", "")).equals("")) {
+                    testConnection.setSummary(getString(R.string.missing_username));
+                    return true;
+                }
 
-				try {
-					SubsonicCaller.setServerDetails(serverUrl, username, password, self);
-					SubsonicCaller.ping(new SubsonicCaller.PingResponseListener() {
-						@Override
-						public void onPingResponse(boolean ok) {
-							testConnection.setSummary(ok ? getString(R.string.success) : getString(R.string.failure));
-						}
-					});
-				} catch (Exception e) {
-					testConnection.setSummary(getString(R.string.failure));
-				}
-				return true;
-			}
-		});
-	}
+                final String password;
+                if ((password = prefs.getString("password", "")).equals("")) {
+                    testConnection.setSummary(getString(R.string.missing_password));
+                    return true;
+                }
 
-	@SuppressWarnings("deprecation")
-	@Override
-	public void onResume() {
-		super.onResume();
+                testConnection.setSummary(getString(R.string.testing_connection));
 
-		SharedPreferences prefs = this.getPreferenceScreen().getSharedPreferences();
+                try {
+                    SubsonicCaller.setServerDetails(serverUrl, username, password, self);
+                    SubsonicCaller.ping(new SubsonicCaller.PingResponseListener() {
+                        @Override
+                        public void onPingResponse(final boolean ok) {
+                            testConnection.setSummary(ok ? getString(R.string.success) : getString(R.string.failure));
+                        }
+                    });
+                } catch (final Exception e) {
+                    testConnection.setSummary(getString(R.string.failure));
+                }
+                return true;
+            }
+        });
+    }
 
-		for (String prefStr : prefs.getAll().keySet()) {
-			PreferenceActivity.updatePrefSummary(this.findPreference(prefStr));
-		}
+    @SuppressWarnings("deprecation")
+    @Override
+    public void onResume() {
+        super.onResume();
 
-		prefs.registerOnSharedPreferenceChangeListener(this);
-	}
+        final SharedPreferences prefs = getPreferenceScreen().getSharedPreferences();
 
-	@SuppressWarnings("deprecation")
-	@Override
-	public void onPause() {
-		super.onPause();
+        for (final String prefStr : prefs.getAll().keySet()) {
+            updatePrefSummary(findPreference(prefStr));
+        }
 
-		this.getPreferenceScreen().getSharedPreferences().unregisterOnSharedPreferenceChangeListener(this);
-	}
+        prefs.registerOnSharedPreferenceChangeListener(this);
+    }
 
-	// set the preference summary to its value
-	static private void updatePrefSummary(Preference pref) {
-		if (pref instanceof EditTextPreference) {
-			EditTextPreference etPref = (EditTextPreference)pref;
-			String summary = etPref.getText();
+    @SuppressWarnings("deprecation")
+    @Override
+    public void onPause() {
+        super.onPause();
 
-			// if password, only show '*' chars
-			if (etPref.getEditText().getInputType() == (InputType.TYPE_TEXT_VARIATION_PASSWORD | InputType.TYPE_CLASS_TEXT)) {
-				char[] chars = new char[summary.length()];
-				Arrays.fill(chars, '*');
-				summary = new String(chars);
-			}
+        getPreferenceScreen().getSharedPreferences().unregisterOnSharedPreferenceChangeListener(this);
+    }
 
-			pref.setSummary(summary);
-		}
-	}
+    // set the preference summary to its value
+    private static void updatePrefSummary(final Preference pref) {
+        if (pref instanceof EditTextPreference) {
+            final EditTextPreference etPref = (EditTextPreference)pref;
+            String summary = etPref.getText();
 
-	@SuppressWarnings("deprecation")
-	public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
-		Preference pref = this.findPreference(key);
-		PreferenceActivity.updatePrefSummary(pref);
-	}
+            // if password, only show '*' chars
+            if (etPref.getEditText().getInputType() == (InputType.TYPE_TEXT_VARIATION_PASSWORD | InputType.TYPE_CLASS_TEXT)) {
+                final char[] chars = new char[summary.length()];
+                Arrays.fill(chars, '*');
+                summary = new String(chars);
+            }
+
+            pref.setSummary(summary);
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    public void onSharedPreferenceChanged(final SharedPreferences sharedPreferences, final String key) {
+        final Preference pref = findPreference(key);
+        updatePrefSummary(pref);
+    }
 }

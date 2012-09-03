@@ -2,7 +2,6 @@
 <!--
   ~ Copyright (c) 2012, Joseph Casamento
   ~ All rights reserved.
-  ~
   ~ Redistribution and use in source and binary forms, with or without
   ~ modification, are permitted provided that the following conditions are met:
   ~
@@ -28,7 +27,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical" >
-    
+
     <TextView
         android:id="@+id/label"
         android:layout_width="wrap_content"

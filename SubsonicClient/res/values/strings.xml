@@ -85,5 +85,8 @@
     <string name="download_service">Download service started</string>
     <string name="server_not_set_up">The server details have not been set up.</string>
     <string name="refresh">Refresh</string>
+    <string name="icon">icon</string>
+    <string name="title">title</string>
+    <string name="path">Path</string>
 
 </resources>
