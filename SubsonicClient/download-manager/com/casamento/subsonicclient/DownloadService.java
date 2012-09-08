@@ -27,6 +27,7 @@ package com.casamento.subsonicclient;
 import android.app.Notification;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.ContentValues;
 import android.content.Intent;
 import android.os.Binder;
 import android.os.IBinder;
@@ -45,7 +46,6 @@ import java.util.LinkedList;
 public class DownloadService extends Service {
     private static final String logTag = "SubsonicClient/DownloadService";
     private static final Collection<Listener> mListeners = new ArrayList<Listener>();
-
     private static final LinkedList<Download> mPendingDownloads = new LinkedList<Download>();
 
     private static DownloadTask mCurrentTask;
@@ -55,11 +55,18 @@ public class DownloadService extends Service {
         private boolean mStarted = false, mCompleted = false, mCancelled = false;
         private long mProgress;
 
-        final String url, name, savePath, username, password;
+        private final String mUrl, mSavePath, mUsername, mPassword;
+        private final MediaFile mMediaFile;
+
+        MediaFile getMediaFile() { return mMediaFile; }
+        String getUrl()          { return mUrl;       }
+        String getSavePath()     { return mSavePath;  }
+        String getUsername()     { return mUsername;  }
+        String getPassword()     { return mPassword;  }
 
         @Override
         public boolean equals(final Object o) {
-            return (o instanceof Download && ((Download) o).url.equals(url));
+            return (o instanceof Download && ((Download) o).getUrl().equals(mUrl));
         }
 
         private void setStarted()   { mStarted = true;   }
@@ -78,13 +85,13 @@ public class DownloadService extends Service {
             return mProgress;
         }
 
-        private Download(final String url, final String name, final String savePath, final String username,
-                final String password) {
-            this.url = url;
-            this.name = name;
-            this.savePath = savePath;
-            this.username = username;
-            this.password = password;
+        private Download(final MediaFile mediaFile, final boolean transcoded, final String savePath,
+                final String username, final String password) {
+            mUrl = SubsonicCaller.getDownloadUrl(mediaFile, transcoded);
+            mMediaFile = mediaFile;
+            mSavePath = savePath;
+            mUsername = username;
+            mPassword = password;
         }
 
         private final long KB = 1L << 10, MB = KB << 10, GB = MB << 10, TB = GB << 10;
@@ -143,13 +150,13 @@ public class DownloadService extends Service {
         mListeners.remove(listener);
     }
 
-    void queue(final String url, final String name, final String savePath, final String username,
+    void queue(final MediaFile mediaFile, final boolean transcoded, final String savePath, final String username,
             final String password) {
-        final Download d = new Download(url, name, savePath, username, password);
+        final Download d = new Download(mediaFile, transcoded, savePath, username, password);
 
         if (!mPendingDownloads.contains(d)) {
-            for (final Listener dl : mListeners)
-                dl.onAddition(d);
+            for (final Listener l : mListeners)
+                l.onAddition(d);
 
             mPendingDownloads.addLast(d);
 
@@ -196,7 +203,7 @@ public class DownloadService extends Service {
 
         @Override
         public void onStart(final Download d) {
-            updateNotification(d.name, d.savePath);
+            updateNotification(d.getMediaFile().name, d.getSavePath());
         }
 
         @Override
@@ -211,6 +218,10 @@ public class DownloadService extends Service {
 
         @Override
         public void onCompletion(final Download d) {
+            final ContentValues cv = new ContentValues();
+            cv.put(SubsonicCaller.DatabaseHelper.CACHED.name, 1);
+            SubsonicCaller.getDatabaseHelper().update(d.getMediaFile(), cv);
+
             startNextOrSleep();
         }
 
@@ -317,9 +328,10 @@ public class DownloadService extends Service {
         @Override
         protected Download doInBackground(final Void... params) {
             try {
-                final String savePath = mDownload.savePath;
+                final String savePath = mDownload.getSavePath();
 
-                final InputStream input = getStream(mDownload.url, mDownload.username, mDownload.password);
+                final InputStream input = getStream(mDownload.getUrl(), mDownload.getUsername(),
+                        mDownload.getPassword());
                 final File outDir = new File(savePath.substring(0, savePath.lastIndexOf("/")));
 
                 outDir.mkdirs();
@@ -358,7 +370,7 @@ public class DownloadService extends Service {
 
         @Override
         protected void onCancelled(final Download d) {
-            new File(d.savePath).delete();
+            new File(d.getSavePath()).delete();
         }
     }
 

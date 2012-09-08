@@ -31,17 +31,19 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.util.Log;
+import org.apache.http.auth.AuthenticationException;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.util.HashMap;
 import java.util.Map;
 
-import static com.casamento.subsonicclient.SubsonicCaller.DatabaseHelper.*;
+import static com.casamento.subsonicclient.SubsonicCaller.DatabaseHelper.getInstance;
 
 class SubsonicCaller extends RestCaller {
     private static final String API_VERSION = "1.4.0"; // 1.4.0+ required for JSON
@@ -272,16 +274,16 @@ class SubsonicCaller extends RestCaller {
 
     static class DatabaseHelper extends SQLiteOpenHelper {
         private static final String DATABASE_NAME = "subsonic.db";
-        private static final int DATABASE_VERSION = 1;
+        private static final int DATABASE_VERSION = 3;
+        private static final String TABLE_NAME = "filesystem_entries";
         private static DatabaseHelper mInstance;
-
-        static final String TABLE_NAME = "filesystem_entries";
 
         static final Column
                 // FilesystemEntry attributes
                 ID = new Column("_id", "integer primary key not null"),
                 NAME = new Column("name", "text not null"),
                 IS_FOLDER = new Column("is_folder", "integer not null"),
+
                 // Folder/MediaFile attributes
                 PARENT_FOLDER = new Column("parent_folder", "integer"),
                 ARTIST = new Column("artist", "text"),
@@ -289,9 +291,11 @@ class SubsonicCaller extends RestCaller {
                 COVER_ART_ID = new Column("cover_art_id", "integer"),
                 CREATED = new Column("created", "text"),
                 IS_TOP_LEVEL = new Column("is_top_level", "integer"),
+
                 // MediaFile attributes
                 PATH = new Column("path", "text"),
                 SUFFIX = new Column("suffix", "text"),
+                TRACK_NUMBER = new Column("track_number", "integer"),
                 TRANSCODED_SUFFIX = new Column("transcoded_suffix", "text"),
                 CONTENT_TYPE = new Column("content_type", "text"),
                 TRANSCODED_CONTENT_TYPE = new Column("transcoded_content_type", "text"),
@@ -302,31 +306,36 @@ class SubsonicCaller extends RestCaller {
                 ALBUM_ID = new Column("album_id", "integer"),
                 YEAR = new Column("year", "integer"),
                 SIZE = new Column("size", "integer"),
-                IS_VIDEO = new Column("is_video", "integer");
+                IS_VIDEO = new Column("is_video", "integer"),
+
+                // other stuff
+                CACHED = new Column("cached", "integer");
 
         static final Column[] COLUMNS = {
-            ID,
-            NAME,
-            IS_FOLDER,
-            PARENT_FOLDER,
-            ARTIST,
-            ALBUM,
-            COVER_ART_ID,
-            CREATED,
-            IS_TOP_LEVEL,
-            PATH,
-            SUFFIX,
-            TRANSCODED_SUFFIX,
-            CONTENT_TYPE,
-            TRANSCODED_CONTENT_TYPE,
-            TYPE,
-            DURATION,
-            BIT_RATE,
-            ARTIST_ID,
-            ALBUM_ID,
-            YEAR,
-            SIZE,
-            IS_VIDEO
+                ID,
+                NAME,
+                IS_FOLDER,
+                PARENT_FOLDER,
+                ARTIST,
+                ALBUM,
+                COVER_ART_ID,
+                CREATED,
+                IS_TOP_LEVEL,
+                PATH,
+                SUFFIX,
+                TRACK_NUMBER,
+                TRANSCODED_SUFFIX,
+                CONTENT_TYPE,
+                TRANSCODED_CONTENT_TYPE,
+                TYPE,
+                DURATION,
+                BIT_RATE,
+                ARTIST_ID,
+                ALBUM_ID,
+                YEAR,
+                SIZE,
+                IS_VIDEO,
+                CACHED
         };
 
         static String[] getColumnNames() {
@@ -360,9 +369,22 @@ class SubsonicCaller extends RestCaller {
             db.execSQL(getCreateCommand());
         }
 
-        Cursor query(final String whereClause) {
-            final String orderByClause = NAME.name + " collate nocase";
-            return getReadableDatabase().query(TABLE_NAME, getColumnNames(), whereClause, null, null, null, orderByClause);
+        Cursor query(final String whereClause, final String orderByClause) {
+            return getReadableDatabase().query(TABLE_NAME, getColumnNames(), whereClause, null, null, null,
+                    orderByClause);
+        }
+
+        Cursor getTopLevelCursor() {
+            return query(IS_TOP_LEVEL.name + "= '1'", NAME.name + " collate nocase");
+        }
+
+        Cursor getFolderContentsCursor(final Folder f) {
+            final String orderBy = "coalesce(" + TRACK_NUMBER.name + "," + NAME.name + ") collate nocase";
+            return query(PARENT_FOLDER.name + "=" + f.id, orderBy);
+        }
+
+        Cursor getFilesystemEntry(final int id) {
+            return query(ID.name + "=" + id, NAME.name + " collate nocase");
         }
 
         long insert(final ContentValues values) {
@@ -372,6 +394,11 @@ class SubsonicCaller extends RestCaller {
         int delete(final Folder f) {
             final String[] id = { Integer.toString(f == null ? Folder.NULL_ID : f.id) };
             return getWritableDatabase().delete(TABLE_NAME, PARENT_FOLDER.name + "=?", id);
+        }
+
+        int update(final FilesystemEntry f, final ContentValues values) {
+            final String[] id = { Integer.toString(f.id) };
+            return getWritableDatabase().update(TABLE_NAME, values, ID.name + "=?", id);
         }
 
         @Override
@@ -387,21 +414,21 @@ class SubsonicCaller extends RestCaller {
 
         static class Column {
             final String name, type;
-            Column(final String name, final String type) {
-                this.name = name;
-                this.type = type;
+            Column(final String theName, final String theType) {
+                name = theName;
+                type = theType;
             }
         }
     }
 
     static FilesystemEntry getFilesystemEntry(final int id) {
-        final Cursor cursor = mDatabaseHelper.query(ID.name + "=" + id);
+        final Cursor cursor = mDatabaseHelper.getFilesystemEntry(id);
         cursor.moveToFirst();
         return FilesystemEntry.getInstance(cursor);
     }
 
-    static void delete(final Folder f) {
-        mDatabaseHelper.delete(f);
+    static DatabaseHelper getDatabaseHelper() {
+        return mDatabaseHelper;
     }
 
     static void setServerDetails(final String serverUrl, final String username, final String password,
@@ -543,102 +570,118 @@ class SubsonicCaller extends RestCaller {
             mCallbackListener.onProgressUpdate(foldersProcessed);
         }
 
-        @Override
-        protected Cursor doInBackground(final Void... nothing) {
-            // if mFolder is null, get the list of top-level folders
-            if (mFolder == null) {
-                final Cursor cursor = mDatabaseHelper.query(IS_TOP_LEVEL.name + "= '1'");
-                if (cursor != null && cursor.getCount() > 0)
-                    return cursor;
+        // grabs the list of top level folders from the server and puts them in the database
+        private void insertTopLevelFoldersIntoDatabase() throws IOException, AuthenticationException, SubsonicException, JSONException, UnsupportedEncodingException {
+            final CharSequence callUrl = buildRestCall(mServerUrl, Methods.GET_MEDIA_FOLDERS, mRequiredParams);
+            final CharSequence response = readAll(getStream(callUrl, mUsername, mPassword));
 
-                try {
-                    final CharSequence callUrl = buildRestCall(mServerUrl, Methods.GET_MEDIA_FOLDERS, mRequiredParams);
-                    final CharSequence response = readAll(getStream(callUrl, mUsername, mPassword));
+            if (isCancelled()) return;
 
-                    if (isCancelled()) return null;
+            final JSONObject jResponse = parseSubsonicResponse(response);
 
-                    final JSONObject jResponse = parseSubsonicResponse(response);
+            final JSONArray jFolderArray = jResponse.getJSONObject("musicFolders").getJSONArray("musicFolder");
+            final int jFolderArrayLength = jFolderArray.length();
+            for (int i = 0; i < jFolderArrayLength; i++) {
+                final JSONObject jFolder = jFolderArray.getJSONObject(i);
+                final Folder folder = new Folder(-jFolder.getInt("id"),
+                        jFolder.getString("name"), mFolder != null ? mFolder.id : Folder.NULL_ID);
+                mDatabaseHelper.insert(folder.getContentValues());
+                publishProgress(++entriesInserted);
+            }
+        }
 
-                    final JSONArray jFolderArray = jResponse.getJSONObject("musicFolders").getJSONArray("musicFolder");
-                    final int jFolderArrayLength = jFolderArray.length();
-                    for (int i = 0; i < jFolderArrayLength; i++) {
-                        final JSONObject jFolder = jFolderArray.getJSONObject(i);
-                        final Folder folder = new Folder(-jFolder.getInt("id"),
-                                jFolder.getString("name"), mFolder != null ? mFolder.id : Folder.NULL_ID);
-                        mDatabaseHelper.insert(folder.getContentValues());
-                        publishProgress(++entriesInserted);
-                    }
+        private void insertFolderContentsIntoDatabase(final Folder f) throws IOException, AuthenticationException, SubsonicException, JSONException, UnsupportedEncodingException {
+            final Map<String, String> params = new HashMap<String, String>(mRequiredParams);
+            if (mFolder.isTopLevel)
+                params.put("musicFolderId", Integer.toString(-mFolder.id));
+            else
+                params.put("id", Integer.toString(mFolder.id));
 
-                    return mDatabaseHelper.query(IS_TOP_LEVEL.name + "= '1'");
-                } catch (final Exception e) {
-                    mCallbackListener.onException(e);
-                    return null;
-                }
+            final CharSequence callUrl = mFolder.isTopLevel ?
+                    buildRestCall(mServerUrl, Methods.LIST_MEDIA_FOLDER_CONTENTS, params) :
+                    buildRestCall(mServerUrl, Methods.LIST_FOLDER_CONTENTS, params);
+
+            final CharSequence response = readAll(getStream(callUrl, mUsername, mPassword));
+
+            if (isCancelled()) return;
+
+            final JSONObject jResponse = parseSubsonicResponse(response);
+
+            JSONObject jIndexesResponse = jResponse.optJSONObject("indexes");
+            if (jIndexesResponse == null) jIndexesResponse = jResponse.getJSONObject("directory");
+
+            final JSONArray jChildArray = jIndexesResponse.optJSONArray("child");
+            if (jChildArray == null) {
+                final JSONObject jChild = jIndexesResponse.optJSONObject("child");
+                if (jChild != null)
+                    insertJSONObject(jChild, mFolder.id);
+            } else {
+                final int jChildArrayLength = jChildArray.length();
+                for (int i = 0; i < jChildArrayLength; i++)
+                    insertJSONObject(jChildArray.getJSONObject(i), mFolder.id);
             }
 
-            // otherwise, get the contents of the mFolder that was passed
+            final JSONArray jIndexArray = jIndexesResponse.optJSONArray("index");
+            if (jIndexArray != null) {
+                final int jIndexArrayLength = jIndexArray.length();
+                Log.d(logTag, "getting " + Integer.toString(jIndexArrayLength) + " items");
 
+                for (int i = 0; i < jIndexArrayLength; i++) {
+                    final JSONObject jIndex = jIndexArray.getJSONObject(i);
+
+                    // artist tag can be either an array or an object (if there's only one)
+                    final JSONArray jFolderArray = jIndex.optJSONArray("artist");
+                    if (jFolderArray != null) {
+                        final int jFolderArrayLength = jFolderArray.length();
+                        for (int j = 0; j < jFolderArrayLength; j++)
+                            insertJSONObject(jFolderArray.getJSONObject(j), true, mFolder.id);
+                    } else
+                        insertJSONObject(jIndex.getJSONObject("artist"), true, mFolder.id);
+                }
+            }
+        }
+
+        private Cursor getTopLevelCursor() {
+            final Cursor c = mDatabaseHelper.getTopLevelCursor();
+            if (c != null && c.getCount() > 0)
+                return c;
+
+            try {
+                insertTopLevelFoldersIntoDatabase();
+                if (isCancelled()) return null;
+
+                return mDatabaseHelper.getTopLevelCursor();
+            } catch (final Exception e) {
+                mCallbackListener.onException(e);
+                return null;
+            }
+        }
+
+        private Cursor getFolderContentsCursor(final Folder f) {
             // check if there's already data for the media mFolder in the database
-            final Cursor cursor = mFolder.getContentsCursor(mDatabaseHelper);
+            final Cursor cursor = mDatabaseHelper.getFolderContentsCursor(mFolder);
             if (cursor != null && cursor.getCount() > 0)
                 return cursor;
 
             // otherwise, get the data from the server and insert it in the database, then return a new cursor
             try {
-                final Map<String, String> params = new HashMap<String, String>(mRequiredParams);
-                if (mFolder.isTopLevel)
-                    params.put("musicFolderId", Integer.toString(-mFolder.id));
-                else
-                    params.put("id", Integer.toString(mFolder.id));
-
-                final CharSequence callUrl = mFolder.isTopLevel ?
-                        buildRestCall(mServerUrl, Methods.LIST_MEDIA_FOLDER_CONTENTS, params) :
-                        buildRestCall(mServerUrl, Methods.LIST_FOLDER_CONTENTS, params);
-
-                final CharSequence response = readAll(getStream(callUrl, mUsername, mPassword));
-
+                insertFolderContentsIntoDatabase(mFolder);
                 if (isCancelled()) return null;
 
-                final JSONObject jResponse = parseSubsonicResponse(response);
-
-                JSONObject jIndexesResponse = jResponse.optJSONObject("indexes");
-                if (jIndexesResponse == null) jIndexesResponse = jResponse.getJSONObject("directory");
-
-                final JSONArray jChildArray = jIndexesResponse.optJSONArray("child");
-                if (jChildArray == null) {
-                    final JSONObject jChild = jIndexesResponse.optJSONObject("child");
-                    if (jChild != null)
-                        insertJSONObject(jChild, mFolder.id);
-                } else {
-                    final int jChildArrayLength = jChildArray.length();
-                    for (int i = 0; i < jChildArrayLength; i++)
-                        insertJSONObject(jChildArray.getJSONObject(i), mFolder.id);
-                }
-
-                final JSONArray jIndexArray = jIndexesResponse.optJSONArray("index");
-                if (jIndexArray != null) {
-                    final int jIndexArrayLength = jIndexArray.length();
-                    Log.d(logTag, "getting " + Integer.toString(jIndexArrayLength) + " items");
-
-                    for (int i = 0; i < jIndexArrayLength; i++) {
-                        final JSONObject jIndex = jIndexArray.getJSONObject(i);
-
-                        // artist tag can be either an array or an object (if there's only one)
-                        final JSONArray jFolderArray = jIndex.optJSONArray("artist");
-                        if (jFolderArray != null) {
-                            final int jFolderArrayLength = jFolderArray.length();
-                            for (int j = 0; j < jFolderArrayLength; j++)
-                                insertJSONObject(jFolderArray.getJSONObject(j), true, mFolder.id);
-                        } else
-                            insertJSONObject(jIndex.getJSONObject("artist"), true, mFolder.id);
-                    }
-                }
-
-                return mFolder.getContentsCursor(mDatabaseHelper);
+                return mDatabaseHelper.getFolderContentsCursor(mFolder);
             } catch (final Exception e) {
                 mCallbackListener.onException(e);
                 return null;
             }
+        }
+
+        @Override
+        protected Cursor doInBackground(final Void... nothing) {
+            // if mFolder is null, get the list of top-level folders
+            if (mFolder == null) return getTopLevelCursor();
+
+            // otherwise, get the contents of the folder that was passed
+            return getFolderContentsCursor(mFolder);
         }
 
         @Override
@@ -647,48 +690,15 @@ class SubsonicCaller extends RestCaller {
         }
     }
 
-//	/**
-//	 * Streams a given media file to a capable external app via an Intent.
-//	 *
-//	 * @param mediaFile             The MediaFile to stream.
-//	 * @param maxBitRate            (1.2.0+) The maximum bit rate to transcode to; 0 for unlimited.
-//	 * @param format                (1.6.0+) The preferred transcoding format (e.g. "mp3", "flv") (can be null).
-//	 * @param timeOffset            The offset (in seconds) at which to start streaming a video file.
-//	 * @param videoSize             (1.6.0+) The size (in "WIDTHxHEIGHT" format) to request a video in (can be null).
-//	 * @param estimateContentLength (1.8.0+) Whether to estimate the content size in the Content-Length HTTP header.
-//	 * @throws java.net.MalformedURLException If the URL is somehow bad.
-//	 * @throws java.io.UnsupportedEncodingException
-//	 *
-//	 */
-//	static void stream(FilesystemEntry.MediaFile mediaFile, int maxBitRate, String format, int timeOffset, String videoSize, boolean estimateContentLength) throws MalformedURLException, UnsupportedEncodingException, URISyntaxException {
-//		Map<String, String> params = new HashMap<String, String>(mRequiredParams);
-//		params.put("id", Integer.toString(mediaFile.id));
-//		if (maxBitRate > 0)
-//			params.put("maxBitRate", Integer.toString(maxBitRate));
-//		if (format != null)
-//			params.put("format", format);
-//		if (timeOffset > 0)
-//			params.put("timeOffset", Integer.toString(timeOffset));
-//		if (videoSize != null)
-//			params.put("size", videoSize);
-//		if (estimateContentLength)
-//			params.put("estimateContentLength", "true");
-//
-//		Uri streamUri = Uri.parse(buildRestCall(mServerUrl, Methods.STREAM, params).toString());
-//		Intent intent = new Intent(Intent.ACTION_VIEW);
-//		Log.d(logTag, Boolean.toString(mediaFile.isVideo));
-//		if (mediaFile.isVideo)
-//			intent.setDataAndType(streamUri, mediaFile.transcodedContentType != null ? mediaFile.transcodedContentType : "video/*");
-//		else
-//			intent.setDataAndType(streamUri, mediaFile.transcodedContentType != null ? mediaFile.transcodedContentType : "audio/*");
-//		Log.d(logTag, "trying to stream from " + streamUri.toString());
-//		mActivity.startActivity(intent);
-//	}
-
-    static CharSequence getDownloadUrl(final MediaFile mediaFile, final boolean transcoded) throws MalformedURLException, URISyntaxException, UnsupportedEncodingException {
+    static String getDownloadUrl(final MediaFile mediaFile, final boolean transcoded) {
         final Map<String, String> params = new HashMap<String, String>(mRequiredParams);
         params.put("id", Integer.toString(mediaFile.id));
 
-        return buildRestCall(mServerUrl, transcoded ? Methods.STREAM : Methods.DOWNLOAD, params);
+        try {
+            return buildRestCall(mServerUrl, transcoded ? Methods.STREAM : Methods.DOWNLOAD, params);
+        } catch (UnsupportedEncodingException e) {
+            // this shouldn't ever happen, Android always supports UTF-8
+            return null;
+        }
     }
 }

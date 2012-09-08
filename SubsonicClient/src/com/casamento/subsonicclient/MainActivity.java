@@ -118,13 +118,12 @@ public class MainActivity extends SherlockFragmentActivity
             final MediaFile mediaFile = (MediaFile) entry;
 
             try {
-                final String url = (String) SubsonicCaller.getDownloadUrl(mediaFile, transcoded);
                 final String savePath = Environment.getExternalStorageDirectory().toString() + "/SubsonicClient/" +
                         mediaFile.path.substring(0, mediaFile.path.lastIndexOf('.') + 1) +
                         (transcoded && mediaFile.transcodedSuffix != null ?
                                 mediaFile.transcodedSuffix : mediaFile.suffix);
 
-                mDownloadService.queue(url, mediaFile.name, savePath, SubsonicCaller.getUsername(),
+                mDownloadService.queue(mediaFile, transcoded, savePath, SubsonicCaller.getUsername(),
                         SubsonicCaller.getPassword());
             } catch (final Exception e) {
                 Log.e(logTag, "Error", e);
@@ -344,7 +343,7 @@ public class MainActivity extends SherlockFragmentActivity
     @Override
     public void refresh(final ServerBrowserFragment sbf) {
         final Folder f = sbf.getFolder();
-        SubsonicCaller.delete(f);
+        SubsonicCaller.getDatabaseHelper().delete(f);
         showFolderContents(f, false);
     }
 }

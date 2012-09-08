@@ -46,7 +46,7 @@ import java.util.Map;
 class RestCaller {
     private static final String logTag = "RestCaller";
 
-    protected static CharSequence buildRestCall(final String url, final String method,
+    protected static String buildRestCall(final String url, final String method,
             final Map<String, String> params) throws UnsupportedEncodingException {
         String urlStr = "";
 

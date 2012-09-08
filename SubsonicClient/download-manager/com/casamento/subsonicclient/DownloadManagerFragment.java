@@ -187,10 +187,10 @@ public class DownloadManagerFragment extends SherlockListFragment {
             // explicitly created it like ten seconds ago
             // TODO: figure out what the root problem is here and fix it
             if (holder.name != null)
-                holder.name.setText(d.name);
+                holder.name.setText(d.getMediaFile().name);
 
             if (holder.path != null)
-                holder.path.setText(d.savePath);
+                holder.path.setText(d.getSavePath());
 
             if (holder.progressView != null)
                 holder.progressView.setText(d.getProgressString());

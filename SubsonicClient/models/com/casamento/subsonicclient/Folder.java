@@ -85,8 +85,4 @@ class Folder extends FilesystemEntry {
 
         return cv;
     }
-
-    Cursor getContentsCursor(final SubsonicCaller.DatabaseHelper dbHelper) {
-        return dbHelper.query(SubsonicCaller.DatabaseHelper.PARENT_FOLDER.name + "=" + id);
-    }
 }

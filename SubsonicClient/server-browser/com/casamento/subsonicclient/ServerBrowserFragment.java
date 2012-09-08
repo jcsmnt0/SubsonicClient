@@ -239,7 +239,7 @@ public class ServerBrowserFragment extends SherlockListFragment {
 
     private static class FilesystemEntryCursorAdapter extends CursorAdapter implements SectionIndexer {
         private final LayoutInflater inflater;
-        private final int idCol, nameCol;
+        private final int idCol, nameCol, trackNumCol, cachedCol;
         private final AlphabetIndexer indexer;
 
         private FilesystemEntryCursorAdapter(final Context context, final Cursor c, final boolean autoRequery) {
@@ -248,8 +248,11 @@ public class ServerBrowserFragment extends SherlockListFragment {
             indexer = new AlphabetIndexer(c, c.getColumnIndex(DatabaseHelper.NAME.name), "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
 
             inflater = LayoutInflater.from(context);
-            idCol = c.getColumnIndex(DatabaseHelper.ID.name);
-            nameCol = c.getColumnIndex(DatabaseHelper.NAME.name);
+
+            idCol       = c.getColumnIndex(DatabaseHelper.ID.name);
+            nameCol     = c.getColumnIndex(DatabaseHelper.NAME.name);
+            cachedCol   = c.getColumnIndex(DatabaseHelper.CACHED.name);
+            trackNumCol = c.getColumnIndex(DatabaseHelper.TRACK_NUMBER.name);
         }
 
         @Override
@@ -260,9 +263,19 @@ public class ServerBrowserFragment extends SherlockListFragment {
         @Override
         public void bindView(final View view, final Context context, final Cursor cursor) {
             final TextView tv = (TextView)view.findViewById(R.id.label);
-            tv.setText(cursor.getString(nameCol));
+
+            final String name = cursor.getString(nameCol);
+            final int trackNumber = cursor.getInt(trackNumCol);
+
+            final String displayName = trackNumber > 0 ? Integer.toString(trackNumber) + ". " + name : name;
+
+            tv.setText(displayName);
+
             // set the subsonic ID as the view's tag
             view.setTag(cursor.getInt(idCol));
+
+            view.setBackgroundResource(cursor.getInt(cachedCol) == 1 ?
+                    R.color.abs__holo_blue_light : R.color.abs__background_holo_dark);
         }
 
         @Override

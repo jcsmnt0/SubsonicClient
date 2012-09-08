@@ -31,9 +31,11 @@ import org.json.JSONObject;
 
 import java.util.Calendar;
 
+import static com.casamento.subsonicclient.SubsonicCaller.DatabaseHelper.*;
+
 class MediaFile extends FilesystemEntry {
     final String contentType, suffix, transcodedSuffix, transcodedContentType, path, album, artist, type;
-    final int duration, bitRate, albumId, artistId, year;
+    final int duration, bitRate, albumId, artistId, year, trackNumber;
     final long size;
     final boolean isVideo;
     final Calendar created;
@@ -54,58 +56,61 @@ class MediaFile extends FilesystemEntry {
         isVideo = jFile.optBoolean("isVideo", false);
 
         duration	= jFile.optInt("duration", -1);
-        bitRate	= jFile.optInt("bitRate", -1);
-        albumId	= jFile.optInt("albumId", -1);
+        bitRate	    = jFile.optInt("bitRate", -1);
+        albumId	    = jFile.optInt("albumId", -1);
         artistId	= jFile.optInt("artistId", -1);
         year		= jFile.optInt("year", -1);
+        trackNumber = jFile.optInt("track", -1);
 
         created = Util.getDateFromString(jFile.optString("created", null));
     }
 
     MediaFile(final Cursor c) {
-        path = c.getString(c.getColumnIndex(SubsonicCaller.DatabaseHelper.PATH.name));
-        suffix = c.getString(c.getColumnIndex(SubsonicCaller.DatabaseHelper.SUFFIX.name));
+        path = c.getString(c.getColumnIndex(PATH.name));
+        suffix = c.getString(c.getColumnIndex(SUFFIX.name));
 
-        contentType = c.getString(c.getColumnIndex(SubsonicCaller.DatabaseHelper.CONTENT_TYPE.name));
-        transcodedContentType = c.getString(c.getColumnIndex(SubsonicCaller.DatabaseHelper.TRANSCODED_CONTENT_TYPE.name));
-        transcodedSuffix = c.getString(c.getColumnIndex(SubsonicCaller.DatabaseHelper.TRANSCODED_SUFFIX.name));
-        album = c.getString(c.getColumnIndex(SubsonicCaller.DatabaseHelper.ALBUM.name));
-        artist = c.getString(c.getColumnIndex(SubsonicCaller.DatabaseHelper.ARTIST.name));
-        type = c.getString(c.getColumnIndex(SubsonicCaller.DatabaseHelper.TYPE.name));
+        contentType = c.getString(c.getColumnIndex(CONTENT_TYPE.name));
+        transcodedContentType = c.getString(c.getColumnIndex(TRANSCODED_CONTENT_TYPE.name));
+        transcodedSuffix = c.getString(c.getColumnIndex(TRANSCODED_SUFFIX.name));
+        album = c.getString(c.getColumnIndex(ALBUM.name));
+        artist = c.getString(c.getColumnIndex(ARTIST.name));
+        type = c.getString(c.getColumnIndex(TYPE.name));
 
-        size = c.getLong(c.getColumnIndex(SubsonicCaller.DatabaseHelper.SIZE.name));
+        size = c.getLong(c.getColumnIndex(SIZE.name));
 
-        isVideo = c.getInt(c.getColumnIndex(SubsonicCaller.DatabaseHelper.IS_VIDEO.name)) == 1;
+        isVideo = c.getInt(c.getColumnIndex(IS_VIDEO.name)) == 1;
 
-        duration = c.getInt(c.getColumnIndex(SubsonicCaller.DatabaseHelper.DURATION.name));
-        bitRate = c.getInt(c.getColumnIndex(SubsonicCaller.DatabaseHelper.BIT_RATE.name));
-        albumId = c.getInt(c.getColumnIndex(SubsonicCaller.DatabaseHelper.ALBUM_ID.name));
-        artistId = c.getInt(c.getColumnIndex(SubsonicCaller.DatabaseHelper.ARTIST_ID.name));
-        year = c.getInt(c.getColumnIndex(SubsonicCaller.DatabaseHelper.YEAR.name));
+        duration = c.getInt(c.getColumnIndex(DURATION.name));
+        bitRate = c.getInt(c.getColumnIndex(BIT_RATE.name));
+        albumId = c.getInt(c.getColumnIndex(ALBUM_ID.name));
+        artistId = c.getInt(c.getColumnIndex(ARTIST_ID.name));
+        year = c.getInt(c.getColumnIndex(YEAR.name));
+        trackNumber = c.getInt(c.getColumnIndex(TRACK_NUMBER.name));
 
-        created = Util.getDateFromString(c.getString(c.getColumnIndex(SubsonicCaller.DatabaseHelper.CREATED.name)));
+        created = Util.getDateFromString(c.getString(c.getColumnIndex(CREATED.name)));
     }
 
     ContentValues getContentValues() {
         final ContentValues cv = new ContentValues();
         cv.putAll(super.getContentValues());
 
-        cv.put(SubsonicCaller.DatabaseHelper.PATH.name, path);
-        cv.put(SubsonicCaller.DatabaseHelper.SUFFIX.name, suffix);
-        cv.put(SubsonicCaller.DatabaseHelper.CONTENT_TYPE.name, contentType);
-        cv.put(SubsonicCaller.DatabaseHelper.TRANSCODED_CONTENT_TYPE.name, transcodedContentType);
-        cv.put(SubsonicCaller.DatabaseHelper.TRANSCODED_SUFFIX.name, transcodedSuffix);
-        cv.put(SubsonicCaller.DatabaseHelper.ARTIST.name, artist);
-        cv.put(SubsonicCaller.DatabaseHelper.ALBUM.name, album);
-        cv.put(SubsonicCaller.DatabaseHelper.TYPE.name, type);
-        cv.put(SubsonicCaller.DatabaseHelper.SIZE.name, size);
-        cv.put(SubsonicCaller.DatabaseHelper.IS_VIDEO.name, isVideo);
-        cv.put(SubsonicCaller.DatabaseHelper.DURATION.name, duration);
-        cv.put(SubsonicCaller.DatabaseHelper.BIT_RATE.name, bitRate);
-        cv.put(SubsonicCaller.DatabaseHelper.ALBUM_ID.name, albumId);
-        cv.put(SubsonicCaller.DatabaseHelper.ARTIST_ID.name, artistId);
-        cv.put(SubsonicCaller.DatabaseHelper.YEAR.name, year);
-        cv.put(SubsonicCaller.DatabaseHelper.CREATED.name, Util.getStringFromDate(created));
+        cv.put(PATH.name, path);
+        cv.put(SUFFIX.name, suffix);
+        cv.put(TRACK_NUMBER.name, trackNumber);
+        cv.put(CONTENT_TYPE.name, contentType);
+        cv.put(TRANSCODED_CONTENT_TYPE.name, transcodedContentType);
+        cv.put(TRANSCODED_SUFFIX.name, transcodedSuffix);
+        cv.put(ARTIST.name, artist);
+        cv.put(ALBUM.name, album);
+        cv.put(TYPE.name, type);
+        cv.put(SIZE.name, size);
+        cv.put(IS_VIDEO.name, isVideo);
+        cv.put(DURATION.name, duration);
+        cv.put(BIT_RATE.name, bitRate);
+        cv.put(ALBUM_ID.name, albumId);
+        cv.put(ARTIST_ID.name, artistId);
+        cv.put(YEAR.name, year);
+        cv.put(CREATED.name, Util.getStringFromDate(created));
 
         return cv;
     }
