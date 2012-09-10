@@ -25,212 +25,122 @@
 package com.casamento.subsonicclient;
 
 import android.content.ContentProvider;
+import android.content.ContentResolver;
 import android.content.ContentValues;
-import android.content.Context;
 import android.content.UriMatcher;
 import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
-import android.database.sqlite.SQLiteOpenHelper;
 import android.net.Uri;
 
-class SubsonicProvider extends ContentProvider {
-    private DatabaseHelper mDatabaseHelper;
+public class SubsonicProvider extends ContentProvider {
+    private SubsonicDatabaseHelper mDatabaseHelper;
+    private UriMatcher mUriMatcher;
 
     private static final String AUTHORITY = "com.casamento.subsonicclient.SubsonicProvider";
 
     enum Queries {
-        TOP_LEVEL_FOLDERS(""),
-        FOLDER_CONTENTS,
-        FILESYSTEM_ENTRY;
+        TOP_LEVEL_FOLDERS("top_level_folders", true),
+        FOLDER_CONTENTS("folder_contents", false),
+        FILESYSTEM_ENTRY("filesystem_entry", false),
+        INSERT("insert", true),
+        UPDATE("update", false);
 
-        final String uri;
+        private final String CONTENT_TYPE = "filesystem_entry";
 
-        private Queries(final String theUri) {
-            uri = theUri;
-        }
+        final Uri uri;
+        final String basePath, type;
 
-        private UriMatcher getUriMatcher() {
-
+        Queries(final String uriPart, final boolean isDir) {
+            final String finalSegment = isDir ? "" : "/*";
+            basePath = uriPart + finalSegment;
+            uri = Uri.parse("content://" + AUTHORITY + "/" + uriPart);
+            type = (isDir ? ContentResolver.CURSOR_DIR_BASE_TYPE : ContentResolver.CURSOR_ITEM_BASE_TYPE) + "/" +
+                    CONTENT_TYPE + finalSegment;
         }
     }
 
+    private UriMatcher getUriMatcher() {
+        final UriMatcher u = new UriMatcher(UriMatcher.NO_MATCH);
+
+        for (final Queries q : Queries.values())
+            u.addURI(AUTHORITY, q.basePath, q.ordinal());
+
+        return u;
+    }
+
+    private Queries getQueryType(final Uri uri) {
+        return Queries.values()[mUriMatcher.match(uri)];
+    }
+
+
     @Override
     public boolean onCreate() {
-        mDatabaseHelper = new DatabaseHelper(getContext());
+        mDatabaseHelper = new SubsonicDatabaseHelper(getContext());
+        mUriMatcher = getUriMatcher();
         return true;
     }
 
     @Override
-    public Cursor query(Uri uri, String[] strings, String s, String[] strings1, String s1) {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+    public Cursor query(final Uri uri, final String[] projection, final String selection, final String[] selectionArgs,
+            final String orderBy) {
+        switch (getQueryType(uri)) {
+            case TOP_LEVEL_FOLDERS:
+                return mDatabaseHelper.getTopLevelCursor();
+
+            case FOLDER_CONTENTS:
+                return mDatabaseHelper.getFolderContentsCursor(Integer.parseInt(uri.getLastPathSegment()));
+
+            case FILESYSTEM_ENTRY:
+                return mDatabaseHelper.getFilesystemEntry(Integer.parseInt(uri.getLastPathSegment()));
+
+            default:
+                throw new IllegalArgumentException("Unknown URI: " + uri);
+        }
     }
 
     @Override
-    public String getType(Uri uri) {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+    public String getType(final Uri uri) {
+        return Queries.values()[mUriMatcher.match(uri)].type;
     }
 
     @Override
-    public Uri insert(Uri uri, ContentValues contentValues) {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+    public Uri insert(final Uri uri, final ContentValues contentValues) {
+        switch (getQueryType(uri)) {
+            case INSERT:
+                final String row = Long.toString(mDatabaseHelper.insert(contentValues));
+                return Uri.withAppendedPath(Queries.FILESYSTEM_ENTRY.uri, row);
+
+            default:
+                throw new IllegalArgumentException("Unknown URI: " + uri);
+        }
     }
 
     @Override
-    public int delete(Uri uri, String s, String[] strings) {
-        return 0;  //To change body of implemented methods use File | Settings | File Templates.
+    public int delete(final Uri uri, final String selection, final String[] selectionArgs) {
+        switch (getQueryType(uri)) {
+            case TOP_LEVEL_FOLDERS:
+                return mDatabaseHelper.deleteTopLevelFolders();
+
+            case FOLDER_CONTENTS:
+                return mDatabaseHelper.deleteFolder(Integer.parseInt(uri.getLastPathSegment()));
+
+            case FILESYSTEM_ENTRY:
+                return mDatabaseHelper.deleteEntry(Integer.parseInt(uri.getLastPathSegment()));
+
+            default:
+                throw new IllegalArgumentException("Unknown URI: " + uri);
+        }
     }
 
     @Override
-    public int update(Uri uri, ContentValues contentValues, String s, String[] strings) {
-        return 0;  //To change body of implemented methods use File | Settings | File Templates.
-    }
+    public int update(final Uri uri, final ContentValues contentValues, final String selection,
+            final String[] selectionArgs) {
+        switch (getQueryType(uri)) {
+            case UPDATE:
+                final int row = Integer.parseInt(uri.getLastPathSegment());
+                return mDatabaseHelper.update(row, contentValues);
 
-    static class DatabaseHelper extends SQLiteOpenHelper {
-        private static final String DATABASE_NAME = "subsonic.db";
-        private static final int DATABASE_VERSION = 3;
-        private static final String TABLE_NAME = "filesystem_entries";
-        private static DatabaseHelper mInstance;
-
-        static final Column
-                // FilesystemEntry attributes
-                ID = new Column("_id", "integer primary key not null"),
-                NAME = new Column("name", "text not null"),
-                IS_FOLDER = new Column("is_folder", "integer not null"),
-
-        // Folder/MediaFile attributes
-        PARENT_FOLDER = new Column("parent_folder", "integer"),
-                ARTIST = new Column("artist", "text"),
-                ALBUM = new Column("album", "text"),
-                COVER_ART_ID = new Column("cover_art_id", "integer"),
-                CREATED = new Column("created", "text"),
-                IS_TOP_LEVEL = new Column("is_top_level", "integer"),
-
-        // MediaFile attributes
-        PATH = new Column("path", "text"),
-                SUFFIX = new Column("suffix", "text"),
-                TRACK_NUMBER = new Column("track_number", "integer"),
-                TRANSCODED_SUFFIX = new Column("transcoded_suffix", "text"),
-                CONTENT_TYPE = new Column("content_type", "text"),
-                TRANSCODED_CONTENT_TYPE = new Column("transcoded_content_type", "text"),
-                TYPE = new Column("type", "text"),
-                DURATION = new Column("duration", "integer"),
-                BIT_RATE = new Column("bit_rate", "integer"),
-                ARTIST_ID = new Column("artist_id", "integer"),
-                ALBUM_ID = new Column("album_id", "integer"),
-                YEAR = new Column("year", "integer"),
-                SIZE = new Column("size", "integer"),
-                IS_VIDEO = new Column("is_video", "integer"),
-
-        // other stuff
-        CACHED = new Column("cached", "integer");
-
-        static final Column[] COLUMNS = {
-                ID,
-                NAME,
-                IS_FOLDER,
-                PARENT_FOLDER,
-                ARTIST,
-                ALBUM,
-                COVER_ART_ID,
-                CREATED,
-                IS_TOP_LEVEL,
-                PATH,
-                SUFFIX,
-                TRACK_NUMBER,
-                TRANSCODED_SUFFIX,
-                CONTENT_TYPE,
-                TRANSCODED_CONTENT_TYPE,
-                TYPE,
-                DURATION,
-                BIT_RATE,
-                ARTIST_ID,
-                ALBUM_ID,
-                YEAR,
-                SIZE,
-                IS_VIDEO,
-                CACHED
-        };
-
-        static String[] getColumnNames() {
-            final int columnCount = COLUMNS.length;
-            final String[] columnNames = new String[columnCount];
-            for (int i = 0; i < columnCount; i++) {
-                columnNames[i] = COLUMNS[i].name;
-            }
-            return columnNames;
-        }
-
-        public static String getCreateCommand() {
-            String createCommand = "create table if not exists " + TABLE_NAME + "(";
-            for (final Column column : COLUMNS) {
-                createCommand += column.name + " " + column.type + ",";
-            }
-            return createCommand.substring(0, createCommand.length() - 1) + ");";
-        }
-
-        // ensure only one instance is ever active
-        static DatabaseHelper getInstance(final Context context) {
-            if (mInstance == null)
-                mInstance = new DatabaseHelper(context.getApplicationContext());
-            return mInstance;
-        }
-
-        private DatabaseHelper(final Context context) {
-            super(context, DATABASE_NAME, null, DATABASE_VERSION);
-            final SQLiteDatabase db = getWritableDatabase();
-            //db.execSQL("drop table if exists " + TABLE_NAME + ";");
-            db.execSQL(getCreateCommand());
-        }
-
-        Cursor query(final String whereClause, final String orderByClause) {
-            return getReadableDatabase().query(TABLE_NAME, getColumnNames(), whereClause, null, null, null,
-                    orderByClause);
-        }
-
-        Cursor getTopLevelCursor() {
-            return query(IS_TOP_LEVEL.name + "= '1'", NAME.name + " collate nocase");
-        }
-
-        Cursor getFolderContentsCursor(final Folder f) {
-            final String orderBy = "coalesce(" + TRACK_NUMBER.name + "," + NAME.name + ") collate nocase";
-            return query(PARENT_FOLDER.name + "=" + f.id, orderBy);
-        }
-
-        Cursor getFilesystemEntry(final int id) {
-            return query(ID.name + "=" + id, NAME.name + " collate nocase");
-        }
-
-        long insert(final ContentValues values) {
-            return getWritableDatabase().insertOrThrow(TABLE_NAME, null, values);
-        }
-
-        int delete(final Folder f) {
-            final String[] id = { Integer.toString(f == null ? Folder.NULL_ID : f.id) };
-            return getWritableDatabase().delete(TABLE_NAME, PARENT_FOLDER.name + "=?", id);
-        }
-
-        int update(final FilesystemEntry f, final ContentValues values) {
-            final String[] id = { Integer.toString(f.id) };
-            return getWritableDatabase().update(TABLE_NAME, values, ID.name + "=?", id);
-        }
-
-        @Override
-        public void onCreate(final SQLiteDatabase database) {
-            database.execSQL(getCreateCommand());
-        }
-
-        @Override
-        public void onUpgrade(final SQLiteDatabase database, final int oldVersion, final int newVersion) {
-            database.execSQL("drop table if exists " + TABLE_NAME);
-            onCreate(database);
-        }
-
-        static class Column {
-            final String name, type;
-            Column(final String theName, final String theType) {
-                name = theName;
-                type = theType;
-            }
+            default:
+                throw new IllegalArgumentException("Unknown URI: " + uri);
         }
     }
 }

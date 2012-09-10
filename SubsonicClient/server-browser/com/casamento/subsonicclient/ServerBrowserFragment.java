@@ -27,7 +27,10 @@ package com.casamento.subsonicclient;
 import android.app.Activity;
 import android.content.Context;
 import android.database.Cursor;
+import android.net.Uri;
 import android.os.Bundle;
+import android.support.v4.app.LoaderManager.LoaderCallbacks;
+import android.support.v4.content.Loader;
 import android.support.v4.widget.CursorAdapter;
 import android.text.TextUtils;
 import android.util.Log;
@@ -38,18 +41,20 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.*;
 import android.widget.AdapterView.AdapterContextMenuInfo;
+import android.widget.AdapterView.OnItemClickListener;
 import com.actionbarsherlock.app.ActionBar;
 import com.actionbarsherlock.app.SherlockListFragment;
 import com.actionbarsherlock.view.Menu;
 import com.actionbarsherlock.view.MenuItem;
 
-import static android.widget.AdapterView.OnItemClickListener;
-import static com.casamento.subsonicclient.SubsonicCaller.DatabaseHelper;
+import static com.casamento.subsonicclient.MainActivity.FOLDER_CONTENTS_LOADER;
+import static com.casamento.subsonicclient.SubsonicCaller.DatabaseHelper.*;
 
 public class ServerBrowserFragment extends SherlockListFragment {
     private static final String logTag = "ServerBrowserFragment";
     private final Cursor mCursor;
     private final Folder mFolder;
+    private CursorAdapter mAdapter;
     private boolean mLoading;
 
     void setLoading(final boolean loading) {
@@ -67,6 +72,9 @@ public class ServerBrowserFragment extends SherlockListFragment {
         ActionBar getSupportActionBar();
         void download(FilesystemEntry entry, boolean transcoded);
         void refresh(ServerBrowserFragment sbf);
+        Uri getFilesystemEntryUri(int id);
+        String[] getAllColumns();
+        SubsonicLoaders.FolderContentsCursorLoader getFolderContentsCursorLoader(int folderId);
     }
 
     public ServerBrowserFragment() {
@@ -112,8 +120,10 @@ public class ServerBrowserFragment extends SherlockListFragment {
         registerForContextMenu(lv);
         lv.setFastScrollEnabled(true);
 
-        if (mCursor != null && !mLoading)
-            setListAdapter(new FilesystemEntryCursorAdapter(getSherlockActivity(), mCursor, false));
+        if (mCursor != null && !mLoading) {
+            mAdapter = new FilesystemEntryCursorAdapter(getSherlockActivity(), mCursor, false);
+            setListAdapter(mAdapter);
+        }
     }
 
     // bug fix as per https://code.google.com/p/android/issues/detail?id=19917
@@ -231,33 +241,55 @@ public class ServerBrowserFragment extends SherlockListFragment {
     private final OnItemClickListener mFilesystemEntryClickListener = new OnItemClickListener() {
         @Override
         public void onItemClick(final AdapterView<?> adapterView, final View view, final int i, final long l) {
-            final FilesystemEntry entry = SubsonicCaller.getFilesystemEntry((Integer) view.getTag());
-            if (entry.isFolder)
-                mActivity.showFolderContents((Folder) entry, true);
+            final int folderId = (Integer) view.getTag();
+
+            getLoaderManager().initLoader(FOLDER_CONTENTS_LOADER, null, new LoaderCallbacks<Cursor>() {
+                @Override
+                public Loader<Cursor> onCreateLoader(final int id, final Bundle data) {
+                    return mActivity.getFolderContentsCursorLoader(folderId);
+                }
+
+                @Override
+                public void onLoadFinished(final Loader<Cursor> cursorLoader, final Cursor cursor) {
+                    mAdapter.swapCursor(cursor);
+                    getLoaderManager().destroyLoader(FOLDER_CONTENTS_LOADER);
+                }
+
+                @Override
+                public void onLoaderReset(final Loader<Cursor> cursorLoader) {
+                }
+            });
         }
     };
 
     private static class FilesystemEntryCursorAdapter extends CursorAdapter implements SectionIndexer {
-        private final LayoutInflater inflater;
+        private final LayoutInflater mInflater;
         private final int idCol, nameCol, trackNumCol, cachedCol;
-        private final AlphabetIndexer indexer;
+        private AlphabetIndexer mIndexer;
 
         private FilesystemEntryCursorAdapter(final Context context, final Cursor c, final boolean autoRequery) {
             super(context, c, autoRequery);
 
-            indexer = new AlphabetIndexer(c, c.getColumnIndex(DatabaseHelper.NAME.name), "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+            mIndexer = new AlphabetIndexer(c, c.getColumnIndex(NAME.name), "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
 
-            inflater = LayoutInflater.from(context);
+            mInflater = LayoutInflater.from(context);
 
-            idCol       = c.getColumnIndex(DatabaseHelper.ID.name);
-            nameCol     = c.getColumnIndex(DatabaseHelper.NAME.name);
-            cachedCol   = c.getColumnIndex(DatabaseHelper.CACHED.name);
-            trackNumCol = c.getColumnIndex(DatabaseHelper.TRACK_NUMBER.name);
+            idCol       = c.getColumnIndex(ID.name);
+            nameCol     = c.getColumnIndex(NAME.name);
+            cachedCol   = c.getColumnIndex(CACHED.name);
+            trackNumCol = c.getColumnIndex(TRACK_NUMBER.name);
         }
 
         @Override
         public View newView(final Context context, final Cursor cursor, final ViewGroup viewGroup) {
-            return inflater.inflate(R.layout.music_folder_row_layout, viewGroup, false);
+            return mInflater.inflate(R.layout.music_folder_row_layout, viewGroup, false);
+        }
+
+        @Override
+        public Cursor swapCursor(final Cursor c) {
+            mIndexer = new AlphabetIndexer(c, c.getColumnIndex(NAME.name), "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+
+            return super.swapCursor(c);
         }
 
         @Override
@@ -280,17 +312,17 @@ public class ServerBrowserFragment extends SherlockListFragment {
 
         @Override
         public int getPositionForSection(final int section) {
-            return indexer.getPositionForSection(section);
+            return mIndexer.getPositionForSection(section);
         }
 
         @Override
         public int getSectionForPosition(final int section) {
-            return indexer.getSectionForPosition(section);
+            return mIndexer.getSectionForPosition(section);
         }
 
         @Override
         public Object[] getSections() {
-            return indexer.getSections();
+            return mIndexer.getSections();
         }
     }
 }

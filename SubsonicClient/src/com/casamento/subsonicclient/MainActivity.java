@@ -26,6 +26,7 @@ package com.casamento.subsonicclient;
 
 import android.content.*;
 import android.database.Cursor;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.IBinder;
@@ -33,6 +34,8 @@ import android.preference.PreferenceManager;
 import android.support.v4.app.DialogFragment;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentTransaction;
+import android.support.v4.app.LoaderManager;
+import android.support.v4.content.Loader;
 import android.text.TextUtils;
 import android.util.Log;
 import com.actionbarsherlock.app.ActionBar;
@@ -44,7 +47,6 @@ import com.actionbarsherlock.view.Window;
 import java.util.Stack;
 
 import static com.casamento.subsonicclient.SubsonicCaller.CursorTask;
-import static com.casamento.subsonicclient.SubsonicCaller.setServerDetails;
 
 public class MainActivity extends SherlockFragmentActivity
         implements ServerBrowserFragment.ActivityCallback, DownloadManagerFragment.ActivityCallback {
@@ -144,7 +146,7 @@ public class MainActivity extends SherlockFragmentActivity
     private void showFragment(final Fragment fragment) {
         final FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
         transaction.replace(R.id.fragment_container, fragment);
-        transaction.commit();
+        transaction.commitAllowingStateLoss();
     }
 
     @Override
@@ -228,6 +230,8 @@ public class MainActivity extends SherlockFragmentActivity
         ServerNotSetUpException() { super(getString(R.string.server_not_set_up)); }
     }
 
+    private String mServerUrl, mUsername, mPassword;
+
     private void connectToServer() throws ServerNotSetUpException {
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
 
@@ -237,13 +241,18 @@ public class MainActivity extends SherlockFragmentActivity
                 TextUtils.isEmpty(password = prefs.getString("password", "")))
             throw new ServerNotSetUpException();
 
-        setServerDetails(serverUrl, username, password, this);
+        mServerUrl = serverUrl;
+        mUsername = username;
+        mPassword = password;
+
+        SubsonicCaller.setServerDetails(serverUrl, username, password, this);
         serverConnected = true;
     }
 
     // TODO: replace with ContentProvider
     private CursorTask getCursorTask(final Folder folder, final CursorTask.Listener callbackListener) throws ServerNotSetUpException {
         if (!serverConnected) connectToServer();
+
         return new CursorTask(folder, callbackListener);
     }
 
@@ -290,54 +299,57 @@ public class MainActivity extends SherlockFragmentActivity
         showFolderContents(mFolderStack.pop(), false);
     }
 
+    static final int FILESYSTEM_ENTRY_LOADER = 1, FOLDER_CONTENTS_LOADER = 2, TOP_LEVEL_FOLDERS_LOADER = 3;
+
+    @Override
+    public Uri getFilesystemEntryUri(final int id) {
+        return Uri.withAppendedPath(SubsonicProvider.Queries.FILESYSTEM_ENTRY.uri, Integer.toString(id));
+    }
+
+    @Override
+    public String[] getAllColumns() {
+        return SubsonicDatabaseHelper.getColumnNames();
+    }
+
+    @Override
+    public SubsonicLoaders.FolderContentsCursorLoader getFolderContentsCursorLoader(final int folderId) {
+        return new SubsonicLoaders.FolderContentsCursorLoader(this, mServerUrl, mUsername, mPassword, folderId);
+    }
+
     @Override
     public void showFolderContents(final Folder folder, final boolean addToStack) {
+        if (!serverConnected)
+            try {
+                connectToServer();
+            } catch (ServerNotSetUpException e) {
+                Log.e(logTag, "error", e);
+            }
+
         showProgressSpinner();
 
-        try {
-            getCursorTask(folder, new CursorTask.Adapter() {
-                @Override
-                public void onPreExecute() {
-                    try {
-                        mServerBrowserFragment.setLoading(true);
-                        mServerBrowserFragment.setListAdapter(null);
-                        mServerBrowserFragment.setEmptyText("Downloading information from server...");
-                    } catch (final IllegalStateException e) {
-                        // sometimes mServerBrowserFragment hasn't had its content view created, even if it's on screen.
-                        // this is pretty harmless, but TODO: find out why and fix it instead of ignoring the exception
-                    }
-                }
+        final Uri queryUri = folder == null ?
+                SubsonicProvider.Queries.TOP_LEVEL_FOLDERS.uri :
+                Uri.withAppendedPath(SubsonicProvider.Queries.FOLDER_CONTENTS.uri, Integer.toString(folder.id));
 
-                @Override
-                public void onProgressUpdate(final Integer... p) {
-                    final CharSequence progressText = TextUtils.expandTemplate("Retrieved ^1 files/folders",
-                            Integer.toString(p[0]));
+        final String[] columnNames = SubsonicDatabaseHelper.getColumnNames();
 
-                    try {
-                        mServerBrowserFragment.setEmptyText(progressText);
-                    } catch (final IllegalStateException e) {
-                        // see comment for onPreExecute()
-                    }
-                }
+        getSupportLoaderManager().initLoader(FOLDER_CONTENTS_LOADER, null, new LoaderManager.LoaderCallbacks<Cursor>() {
+            @Override
+            public Loader<Cursor> onCreateLoader(final int id, final Bundle data) {
+                //return new CursorLoader(MainActivity.this, queryUri, columnNames, null, null, null);
+                return new SubsonicLoaders.TopLevelFoldersCursorLoader(MainActivity.this, mServerUrl, mUsername,
+                        mPassword);
+            }
 
-                @Override
-                public void onResult(final Cursor cursor) {
-                    setServerBrowserFragment(new ServerBrowserFragment(cursor, folder), addToStack);
-                    hideProgressSpinner();
-                }
+            @Override
+            public void onLoadFinished(final Loader<Cursor> cursorLoader, final Cursor cursor) {
+                setServerBrowserFragment(new ServerBrowserFragment(cursor, folder), addToStack);
+            }
 
-                @Override
-                public void onException(final Exception e) {
-                    showDialogFragment(new AlertDialogFragment(getApplicationContext(), R.string.error,
-                            e.getLocalizedMessage()));
-                    hideProgressSpinner();
-                }
-            }).execute((Void) null);
-        } catch (ServerNotSetUpException e) {
-            showDialogFragment(new AlertDialogFragment(getApplicationContext(), R.string.error,
-                    e.getLocalizedMessage()));
-            hideProgressSpinner();
-        }
+            @Override
+            public void onLoaderReset(final Loader<Cursor> cursorLoader) {
+            }
+        });
     }
 
     @Override

@@ -57,6 +57,10 @@
 
         <service android:name=".DownloadService" />
 
+        <provider android:authorities="com.casamento.subsonicclient.SubsonicProvider"
+                  android:multiprocess="true"
+                  android:name=".SubsonicProvider" />
+
 	</application>
 
 </manifest>

@@ -29,7 +29,7 @@ import android.database.Cursor;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import static com.casamento.subsonicclient.SubsonicCaller.DatabaseHelper;
+import static com.casamento.subsonicclient.SubsonicCaller.DatabaseHelper.*;
 
 abstract class FilesystemEntry {
     int id;
@@ -43,7 +43,11 @@ abstract class FilesystemEntry {
         return getInstance(j, j.optBoolean("isDir"));
     }
 
-    static FilesystemEntry getInstance(final JSONObject j, final Boolean isFolder) throws JSONException {
+    static boolean isFolder(final Cursor c) {
+        return c.getInt(c.getColumnIndex(IS_FOLDER.name)) == 1;
+    }
+
+    static FilesystemEntry getInstance(final JSONObject j, final boolean isFolder) throws JSONException {
         final FilesystemEntry newEntry = isFolder ? new Folder(j) : new MediaFile(j);
 
         newEntry.id = j.getInt("id");
@@ -56,15 +60,27 @@ abstract class FilesystemEntry {
         return newEntry;
     }
 
+    static FilesystemEntry getInstance(final JSONObject j, final int parentId) throws JSONException {
+        final FilesystemEntry newEntry = getInstance(j);
+        newEntry.parentId = parentId;
+        return newEntry;
+    }
+
+    static FilesystemEntry getInstance(final JSONObject j, final boolean isFolder, final int parentId) throws JSONException {
+        final FilesystemEntry newEntry = getInstance(j, isFolder);
+        newEntry.parentId = parentId;
+        return newEntry;
+    }
+
     static FilesystemEntry getInstance(final Cursor c) {
-        final boolean isFolder = c.getInt(c.getColumnIndex(DatabaseHelper.IS_FOLDER.name)) == 1;
+        final boolean isFolder = isFolder(c);
 
         final FilesystemEntry newEntry = isFolder ? new Folder(c) : new MediaFile(c);
 
-        newEntry.id = c.getInt(c.getColumnIndex(DatabaseHelper.ID.name));
-        newEntry.parentId = c.getInt(c.getColumnIndex(DatabaseHelper.PARENT_FOLDER.name));
+        newEntry.id = c.getInt(c.getColumnIndex(ID.name));
+        newEntry.parentId = c.getInt(c.getColumnIndex(PARENT_FOLDER.name));
         newEntry.isFolder = isFolder;
-        newEntry.name = c.getString(c.getColumnIndex(DatabaseHelper.NAME.name));
+        newEntry.name = c.getString(c.getColumnIndex(NAME.name));
 
         return newEntry;
     }
@@ -76,10 +92,10 @@ abstract class FilesystemEntry {
     ContentValues getContentValues() {
         final ContentValues cv = new ContentValues();
 
-        cv.put(DatabaseHelper.ID.name, id);
-        cv.put(DatabaseHelper.NAME.name, name);
-        cv.put(DatabaseHelper.PARENT_FOLDER.name, parentId);
-        cv.put(DatabaseHelper.IS_FOLDER.name, isFolder ? 1 : 0);
+        cv.put(ID.name, id);
+        cv.put(NAME.name, name);
+        cv.put(PARENT_FOLDER.name, parentId);
+        cv.put(IS_FOLDER.name, isFolder ? 1 : 0);
 
         return cv;
     }
