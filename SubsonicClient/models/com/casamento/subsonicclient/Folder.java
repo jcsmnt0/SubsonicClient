@@ -26,63 +26,103 @@ package com.casamento.subsonicclient;
 
 import android.content.ContentValues;
 import android.database.Cursor;
-import org.json.JSONObject;
+import android.os.Parcel;
 
 import java.util.Calendar;
 
-class Folder extends FilesystemEntry {
-    static final int NULL_ID = Integer.MIN_VALUE;
-    final int coverArtId;
-    final String artist, album;
-    final Calendar created;
-    final boolean isTopLevel; // MusicFolder, in Subsonic's weird terminology
-
-    Folder(final int id, final String name, final int parentId) {
-        isFolder = true;
-
-        this.id = id;
-        this.name = name;
-        this.parentId = parentId;
-
-        coverArtId = -1;
-        artist = album = null;
-        created = null;
-        isTopLevel = this.id <= 0;
+final class Folder extends FilesystemEntry {
+    @Override
+    public boolean equals(final Object o) {
+        return o instanceof Folder && ((Folder) o).id.equals(id);
     }
 
-    Folder(final JSONObject jFolder) {
-        isTopLevel = false;
+    static final Folder ROOT_FOLDER = new Folder(Integer.MIN_VALUE, null, "Root");
 
-        artist	= Util.fixHTML(jFolder.optString("artist", null));
-        album	= Util.fixHTML(jFolder.optString("album", null));
+    final Integer coverArtId;
+    final String artist, album;
+    final Calendar created;
+    final boolean isTopLevel;
 
-        parentId	= jFolder.optInt("parent", NULL_ID);
-        coverArtId	= jFolder.optInt("coverArt", NULL_ID);
+    // Constructor for top-level folder
+    Folder(final Integer id, final Integer parentId, final String name) {
+        this(id, parentId, name, null, null, null, null, true);
+    }
 
-        created = Util.getDateFromString(jFolder.optString("created", null));
+    Folder(final Integer id, final Integer parentId, final String name, final Integer coverArtId, final String artist,
+            final String album, final Calendar created, final boolean isTopLevel) {
+        super(id, parentId, true, name);
+
+        this.coverArtId = coverArtId;
+        this.artist = artist;
+        this.album = album;
+        this.created = created;
+        this.isTopLevel = isTopLevel;
     }
 
     Folder(final Cursor c) {
-        isTopLevel = c.getInt(c.getColumnIndex(SubsonicCaller.DatabaseHelper.IS_TOP_LEVEL.name)) == 1;
+        super(c);
+        isTopLevel = c.getInt(c.getColumnIndex(DatabaseHelper.IS_TOP_LEVEL.name)) == 1;
 
-        artist = c.getString(c.getColumnIndex(SubsonicCaller.DatabaseHelper.ARTIST.name));
-        album = c.getString(c.getColumnIndex(SubsonicCaller.DatabaseHelper.ALBUM.name));
-        coverArtId = c.getInt(c.getColumnIndex(SubsonicCaller.DatabaseHelper.COVER_ART_ID.name));
-        created = Util.getDateFromString(c.getString(c.getColumnIndex(SubsonicCaller.DatabaseHelper.CREATED.name)));
+        artist = c.getString(c.getColumnIndex(DatabaseHelper.ARTIST.name));
+        album = c.getString(c.getColumnIndex(DatabaseHelper.ALBUM.name));
+        coverArtId = c.getInt(c.getColumnIndex(DatabaseHelper.COVER_ART_ID.name));
+        created = Util.getDateFromISOString(c.getString(c.getColumnIndex(DatabaseHelper.CREATED.name)));
     }
 
+    // Get a ContentValues object representing this folder's members, to insert into a database
     ContentValues getContentValues() {
         final ContentValues cv = new ContentValues();
-
         cv.putAll(super.getContentValues());
-        cv.put(SubsonicCaller.DatabaseHelper.COVER_ART_ID.name, coverArtId);
-        cv.put(SubsonicCaller.DatabaseHelper.ARTIST.name, artist);
-        cv.put(SubsonicCaller.DatabaseHelper.ALBUM.name, album);
-        cv.put(SubsonicCaller.DatabaseHelper.IS_TOP_LEVEL.name, isTopLevel ? 1 : 0);
+
+        cv.put(DatabaseHelper.COVER_ART_ID.name, coverArtId);
+        cv.put(DatabaseHelper.ARTIST.name, artist);
+        cv.put(DatabaseHelper.ALBUM.name, album);
+        cv.put(DatabaseHelper.IS_TOP_LEVEL.name, isTopLevel ? 1 : 0);
 
         if (created != null)
-            cv.put(SubsonicCaller.DatabaseHelper.CREATED.name, Util.getStringFromDate(created));
+            cv.put(DatabaseHelper.CREATED.name, Util.getISOStringFromDate(created));
 
         return cv;
+    }
+
+    // Called when the object is serialized to a Parcel (for inter-process communication)
+    @Override
+    public void writeToParcel(final Parcel out, final int flags) {
+        super.writeToParcel(out, flags);
+        writeParcelPart(out);
+    }
+
+    // Serialize the members that are particular to this object
+    void writeParcelPart(final Parcel out) {
+        out.writeValue(coverArtId);
+        out.writeString(artist);
+        out.writeString(album);
+        out.writeString(Util.getISOStringFromDate(created));
+        out.writeInt(isTopLevel ? 1 : 0);
+    }
+
+    public static final Creator<Folder> CREATOR = new Creator<Folder>() {
+        @Override
+        public Folder createFromParcel(final Parcel in) {
+            return (Folder) getInstance(in);
+        }
+
+        @Override
+        public Folder[] newArray(final int size) {
+            return new Folder[size];
+        }
+    };
+
+    Folder(final Integer id, final Integer parentId, final String name, final Parcel in) {
+        this(
+            id,
+            parentId,
+            name,
+            (Integer) in.readValue(ClassLoader.getSystemClassLoader()),
+            in.readString(),
+            in.readString(),
+            Util.getDateFromISOString(in.readString()),
+            in.readInt() == 1
+        );
     }
 }

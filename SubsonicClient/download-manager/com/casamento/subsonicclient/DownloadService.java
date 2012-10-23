@@ -27,8 +27,8 @@ package com.casamento.subsonicclient;
 import android.app.Notification;
 import android.app.PendingIntent;
 import android.app.Service;
-import android.content.ContentValues;
 import android.content.Intent;
+import android.os.AsyncTask;
 import android.os.Binder;
 import android.os.IBinder;
 import android.support.v4.app.NotificationCompat;
@@ -44,71 +44,11 @@ import java.util.Collection;
 import java.util.LinkedList;
 
 public class DownloadService extends Service {
-    private static final String logTag = "SubsonicClient/DownloadService";
     private static final Collection<Listener> mListeners = new ArrayList<Listener>();
     private static final LinkedList<Download> mPendingDownloads = new LinkedList<Download>();
 
     private static DownloadTask mCurrentTask;
     private Notification mNotification;
-
-    static class Download {
-        private boolean mStarted = false, mCompleted = false, mCancelled = false;
-        private long mProgress;
-
-        private final String mUrl, mSavePath, mUsername, mPassword;
-        private final MediaFile mMediaFile;
-
-        MediaFile getMediaFile() { return mMediaFile; }
-        String getUrl()          { return mUrl;       }
-        String getSavePath()     { return mSavePath;  }
-        String getUsername()     { return mUsername;  }
-        String getPassword()     { return mPassword;  }
-
-        @Override
-        public boolean equals(final Object o) {
-            return (o instanceof Download && ((Download) o).getUrl().equals(mUrl));
-        }
-
-        private void setStarted()   { mStarted = true;   }
-        private void setCompleted() { mCompleted = true; }
-        private void setCancelled() { mCancelled = true; }
-
-        private void setProgress(final long progress) {
-            mProgress = progress;
-        }
-
-        boolean isStarted()   { return mStarted;   }
-        boolean isCompleted() { return mCompleted; }
-        boolean isCancelled() { return mCancelled; }
-
-        long getProgress() {
-            return mProgress;
-        }
-
-        private Download(final MediaFile mediaFile, final boolean transcoded, final String savePath,
-                final String username, final String password) {
-            mUrl = SubsonicCaller.getDownloadUrl(mediaFile, transcoded);
-            mMediaFile = mediaFile;
-            mSavePath = savePath;
-            mUsername = username;
-            mPassword = password;
-        }
-
-        private final long KB = 1L << 10, MB = KB << 10, GB = MB << 10, TB = GB << 10;
-
-        String getProgressString() {
-            if (mProgress >= TB)
-                    return String.format("%.2fTB", (double) mProgress / TB);
-                else if (mProgress >= GB)
-                    return String.format("%.2fGB", (double) mProgress / GB);
-                else if (mProgress >= MB)
-                    return String.format("%.2fMB", (double) mProgress / MB);
-                else if (mProgress >= KB)
-                    return String.format("%.2fKB", (double) mProgress / KB);
-                else
-                    return String.format("%dB", mProgress);
-        }
-    }
 
     interface Listener {
         void onAddition(Download download);
@@ -150,9 +90,9 @@ public class DownloadService extends Service {
         mListeners.remove(listener);
     }
 
-    void queue(final MediaFile mediaFile, final boolean transcoded, final String savePath, final String username,
+    void queue(final String name, final String url, final String savePath, final String username,
             final String password) {
-        final Download d = new Download(mediaFile, transcoded, savePath, username, password);
+        final Download d = new Download(name, url, savePath, username, password);
 
         if (!mPendingDownloads.contains(d)) {
             for (final Listener l : mListeners)
@@ -203,7 +143,7 @@ public class DownloadService extends Service {
 
         @Override
         public void onStart(final Download d) {
-            updateNotification(d.getMediaFile().name, d.getSavePath());
+            updateNotification(d.getName(), d.getSavePath());
         }
 
         @Override
@@ -218,10 +158,6 @@ public class DownloadService extends Service {
 
         @Override
         public void onCompletion(final Download d) {
-            final ContentValues cv = new ContentValues();
-            cv.put(SubsonicCaller.DatabaseHelper.CACHED.name, 1);
-            SubsonicCaller.getDatabaseHelper().update(d.getMediaFile(), cv);
-
             startNextOrSleep();
         }
 
@@ -291,8 +227,8 @@ public class DownloadService extends Service {
                 .getNotification();
     }
 
-    private static class DownloadTask extends RestCaller.DataRetrievalTask<Void, Long, Download> {
-        private static final String logTag = "DownloadTask";
+    // A thread that performs the actual downloading
+    private static class DownloadTask extends AsyncTask<Void, Long, Download> {
         private static final int BUFFER_SIZE = 1024;
 
         private final Download mDownload;
@@ -328,10 +264,12 @@ public class DownloadService extends Service {
         @Override
         protected Download doInBackground(final Void... params) {
             try {
-                final String savePath = mDownload.getSavePath();
-
-                final InputStream input = getStream(mDownload.getUrl(), mDownload.getUsername(),
+                // Get an InputStream for the file on the server
+                final InputStream input = Util.getStream(mDownload.getUrl(), mDownload.getUsername(),
                         mDownload.getPassword());
+
+                // Create the file on the local disk
+                final String savePath = mDownload.getSavePath();
                 final File outDir = new File(savePath.substring(0, savePath.lastIndexOf("/")));
 
                 outDir.mkdirs();
@@ -342,6 +280,7 @@ public class DownloadService extends Service {
                 long total = 0;
                 int count;
 
+                // Read and save data until cancellation or end of file
                 while (!isCancelled() && (count = input.read(data)) != -1) {
                     total += count;
                     publishProgress(total);
@@ -352,7 +291,8 @@ public class DownloadService extends Service {
                 output.close();
                 input.close();
             } catch (final Exception e) {
-                Log.e(logTag, "Error", e);
+                // TODO: exception handling
+                Log.e(getClass().getSimpleName(), "Error", e);
             }
 
             return mDownload;
@@ -374,4 +314,61 @@ public class DownloadService extends Service {
         }
     }
 
+    static class Download {
+        private boolean mStarted = false, mCompleted = false, mCancelled = false;
+        private long mProgress;
+
+        private final String mName, mUrl, mSavePath, mUsername, mPassword;
+
+        String getName()     { return mName;     }
+        String getUrl()      { return mUrl;      }
+        String getSavePath() { return mSavePath; }
+        String getUsername() { return mUsername; }
+        String getPassword() { return mPassword; }
+
+        @Override
+        public boolean equals(final Object o) {
+            return (o instanceof Download && ((Download) o).getUrl().equals(mUrl));
+        }
+
+        private void setStarted()   { mStarted = true;   }
+        private void setCompleted() { mCompleted = true; }
+        private void setCancelled() { mCancelled = true; }
+
+        private void setProgress(final long progress) {
+            mProgress = progress;
+        }
+
+        long getProgress() {
+            return mProgress;
+        }
+
+        boolean isStarted()   { return mStarted;   }
+        boolean isCompleted() { return mCompleted; }
+        boolean isCancelled() { return mCancelled; }
+
+        private Download(final String name, final String url, final String savePath, final String username,
+                final String password) {
+            mName = name;
+            mUrl = url;
+            mSavePath = savePath;
+            mUsername = username;
+            mPassword = password;
+        }
+
+        private final long KB = 1L << 10, MB = KB << 10, GB = MB << 10, TB = GB << 10;
+
+        String getProgressString() {
+            if (mProgress >= TB)
+                    return String.format("%.2fTB", (double) mProgress / TB);
+                else if (mProgress >= GB)
+                    return String.format("%.2fGB", (double) mProgress / GB);
+                else if (mProgress >= MB)
+                    return String.format("%.2fMB", (double) mProgress / MB);
+                else if (mProgress >= KB)
+                    return String.format("%.2fKB", (double) mProgress / KB);
+                else
+                    return String.format("%dB", mProgress);
+        }
+    }
 }

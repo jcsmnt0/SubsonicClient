@@ -24,19 +24,17 @@
 
 package com.casamento.subsonicclient;
 
-import android.content.*;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.ServiceConnection;
 import android.database.Cursor;
-import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.IBinder;
-import android.preference.PreferenceManager;
-import android.support.v4.app.DialogFragment;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentTransaction;
-import android.support.v4.app.LoaderManager;
 import android.support.v4.content.Loader;
-import android.text.TextUtils;
 import android.util.Log;
 import com.actionbarsherlock.app.ActionBar;
 import com.actionbarsherlock.app.SherlockFragmentActivity;
@@ -44,19 +42,65 @@ import com.actionbarsherlock.view.Menu;
 import com.actionbarsherlock.view.MenuItem;
 import com.actionbarsherlock.view.Window;
 
-import java.util.Stack;
-
-import static com.casamento.subsonicclient.SubsonicCaller.CursorTask;
-
 public class MainActivity extends SherlockFragmentActivity
         implements ServerBrowserFragment.ActivityCallback, DownloadManagerFragment.ActivityCallback {
-    private static final String logTag = "MainActivity";
+    private DataSource mDataSource;
 
-    static boolean serverConnected = false;
+    // TODO: implement preference screen with list of servers, so this isn't hard-coded
+    private DataSource.AccessInformation mSubInfo =
+            new SubsonicService.SubsonicAccessInformation("http://subsonic.org/demo", "android-guest", "guest");
 
-    // DownloadService stuff
+    static final int
+            DOWNLOAD_LOADER          = 0,
+            FILESYSTEM_ENTRY_LOADER  = 1,
+            FOLDER_CONTENTS_LOADER   = 2,
+            TOP_LEVEL_FOLDERS_LOADER = 3;
+
+    @Override
+    public void onCreate(final Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        // Make the progress spinner on the right side of the action bar available
+        requestWindowFeature(Window.FEATURE_INDETERMINATE_PROGRESS);
+        setSupportProgressBarIndeterminateVisibility(false);
+
+        // Set up the test data source (TODO: remove once the preference screen works)
+        mDataSource = new DataSource(this, "test", mSubInfo, SubsonicService.class);
+
+        setContentView(R.layout.main);
+
+        // Get an action bar with tabs
+        final ActionBar actionBar = getSupportActionBar();
+        actionBar.setNavigationMode(ActionBar.NAVIGATION_MODE_TABS);
+
+        // Set up the server browser fragment and its associated tab
+        mServerBrowserFragment = new ServerBrowserFragment();
+
+        mServerBrowserTab = actionBar.newTab().setText("Server");
+        mServerBrowserTab.setTabListener(new TabActionListener(mServerBrowserFragment));
+        actionBar.addTab(mServerBrowserTab);
+
+        // The server browser starts loading as soon as it's added, so show the progress spinner
+        showProgressSpinner();
+
+        // Set up the download manager fragment and its associated tab
+        mDownloadManagerTab = actionBar.newTab().setText("Downloads");
+        mDownloadManagerFragment = new DownloadManagerFragment();
+        mDownloadManagerTab.setTabListener(new TabActionListener(mDownloadManagerFragment));
+        actionBar.addTab(mDownloadManagerTab);
+
+        // Start the download service (if necessary)
+        bindDownloadService();
+    }
+
+    @Override
+    public DataSource getDataSource() {
+        return mDataSource;
+    }
+
     private DownloadService mDownloadService;
 
+    // Starts the DownloadService and then binds it to this Activity, so it won't die when the Activity ends
     private void bindDownloadService() {
         final Intent i = new Intent(this, DownloadService.class);
 
@@ -74,6 +118,7 @@ public class MainActivity extends SherlockFragmentActivity
         return mDownloadService;
     }
 
+    // Handle the callback when the DownloadService is bound
     private final ServiceConnection mDownloadServiceConnection = new ServiceConnection() {
         @Override
         public void onServiceConnected(final ComponentName className, final IBinder service) {
@@ -91,63 +136,54 @@ public class MainActivity extends SherlockFragmentActivity
     public void download(final FilesystemEntry entry, final boolean transcoded) {
         if (entry.isFolder) {
             final Folder f = (Folder) entry;
-            try {
-                getCursorTask(f, new CursorTask.Adapter() {
-                    @Override
-                    public void onResult(final Cursor cursor) {
-                        final int entryCount = cursor.getCount();
-                        cursor.moveToFirst();
 
-                        for (int entryIndex = 0; entryIndex < entryCount; entryIndex++) {
-                            download(FilesystemEntry.getInstance(cursor), transcoded);
-                            cursor.moveToNext();
-                        }
-                    }
+            // Load the contents of the folder
+            final Loader<Cursor> contentsLoader = mDataSource.getFolderContentsCursorLoader(f, false);
 
-                    @Override
-                    public void onException(final Exception e) {
-                        Log.e(logTag, "Error", e);
+            // Callback for when the loading is finished
+            contentsLoader.registerListener(0, new Loader.OnLoadCompleteListener<Cursor>() {
+                @Override
+                public void onLoadComplete(final Loader<Cursor> cursorLoader, final Cursor cursor) {
+                    // Queue a download for each item in the folder
+                    cursor.moveToFirst();
+
+                    for (int i = 0, len = cursor.getCount(); i < len; i++) {
+                        download(FilesystemEntry.getInstance(cursor), transcoded);
+                        cursor.moveToNext();
                     }
-                }).execute();
-            } catch (ServerNotSetUpException e) {
-                showDialogFragment(new AlertDialogFragment.Builder(this)
-                        .setMessage(e.getLocalizedMessage())
-                        .setTitle("Error")
-                        .setNeutralButton("OK")
-                        .create());
-            }
+                }
+            });
+
+            contentsLoader.startLoading();
         } else {
             final MediaFile mediaFile = (MediaFile) entry;
 
             try {
+                // Construct the path for the file based on its properties
+                // TODO: this could stand to be a little less hideous
                 final String savePath = Environment.getExternalStorageDirectory().toString() + "/SubsonicClient/" +
                         mediaFile.path.substring(0, mediaFile.path.lastIndexOf('.') + 1) +
                         (transcoded && mediaFile.transcodedSuffix != null ?
                                 mediaFile.transcodedSuffix : mediaFile.suffix);
 
-                mDownloadService.queue(mediaFile, transcoded, savePath, SubsonicCaller.getUsername(),
-                        SubsonicCaller.getPassword());
+                final DataSource.AccessInformation accessInfo = mDataSource.getAccessInformation();
+                final String url = accessInfo.getDownloadUrl(mediaFile, transcoded);
+                final String username = accessInfo.getUsername();
+                final String password = accessInfo.getPassword();
+
+                mDownloadService.queue(mediaFile.name, url, savePath, username, password);
             } catch (final Exception e) {
-                Log.e(logTag, "Error", e);
+                // TODO: better exception handling
+                Log.e(getClass().getSimpleName(), "Error", e);
             }
         }
     }
 
-    // fragment management stuff
     private ServerBrowserFragment mServerBrowserFragment;
     private ActionBar.Tab mServerBrowserTab;
 
     private DownloadManagerFragment mDownloadManagerFragment;
     private ActionBar.Tab mDownloadManagerTab;
-
-    //private Stack<ServerBrowserFragment> serverBrowserFragmentStack = new Stack<ServerBrowserFragment>();
-    private Stack<Folder> mFolderStack = new Stack<Folder>();
-
-    private void showFragment(final Fragment fragment) {
-        final FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
-        transaction.replace(R.id.fragment_container, fragment);
-        transaction.commitAllowingStateLoss();
-    }
 
     @Override
     protected void onDestroy() {
@@ -155,7 +191,8 @@ public class MainActivity extends SherlockFragmentActivity
         unbindDownloadService();
     }
 
-    class TabActionListener implements ActionBar.TabListener {
+    // Action bar tab callbacks: on selection, show the relevant fragment; on unselection, hide the relevant fragment
+    private class TabActionListener implements ActionBar.TabListener {
         private final Fragment mFragment;
 
         private TabActionListener(final Fragment fragment) {
@@ -174,38 +211,8 @@ public class MainActivity extends SherlockFragmentActivity
 
         @Override
         public void onTabReselected(final ActionBar.Tab tab, final FragmentTransaction ft) {
-            // TODO: do something?
+            // do nothing
         }
-    }
-
-    @Override
-    public void onCreate(final Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-
-        requestWindowFeature(Window.FEATURE_INDETERMINATE_PROGRESS);
-        setSupportProgressBarIndeterminateVisibility(false);
-
-        setContentView(R.layout.main);
-
-        final ActionBar actionBar = getSupportActionBar();
-        actionBar.setNavigationMode(ActionBar.NAVIGATION_MODE_TABS);
-
-        mServerBrowserFragment = new ServerBrowserFragment();
-
-        mServerBrowserTab = actionBar.newTab().setText("Server");
-        mServerBrowserTab.setTabListener(new TabActionListener(mServerBrowserFragment));
-        actionBar.addTab(mServerBrowserTab);
-
-        showProgressSpinner();
-
-        showFolderContents(null, false);
-
-        mDownloadManagerTab = actionBar.newTab().setText("Downloads");
-        mDownloadManagerFragment = new DownloadManagerFragment();
-        mDownloadManagerTab.setTabListener(new TabActionListener(mDownloadManagerFragment));
-        actionBar.addTab(mDownloadManagerTab);
-
-        bindDownloadService();
     }
 
     @Override
@@ -226,46 +233,8 @@ public class MainActivity extends SherlockFragmentActivity
         }
     }
 
-    class ServerNotSetUpException extends Exception {
-        ServerNotSetUpException() { super(getString(R.string.server_not_set_up)); }
-    }
-
-    private String mServerUrl, mUsername, mPassword;
-
-    private void connectToServer() throws ServerNotSetUpException {
-        final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
-
-        final String serverUrl, username, password;
-        if (TextUtils.isEmpty(serverUrl = prefs.getString("serverUrl", "")) ||
-                TextUtils.isEmpty(username = prefs.getString("username", "")) ||
-                TextUtils.isEmpty(password = prefs.getString("password", "")))
-            throw new ServerNotSetUpException();
-
-        mServerUrl = serverUrl;
-        mUsername = username;
-        mPassword = password;
-
-        SubsonicCaller.setServerDetails(serverUrl, username, password, this);
-        serverConnected = true;
-    }
-
-    // TODO: replace with ContentProvider
-    private CursorTask getCursorTask(final Folder folder, final CursorTask.Listener callbackListener) throws ServerNotSetUpException {
-        if (!serverConnected) connectToServer();
-
-        return new CursorTask(folder, callbackListener);
-    }
-
-    private void showDialogFragment(final DialogFragment dialogFragment) {
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                dialogFragment.show(getSupportFragmentManager(), "dialog");
-            }
-        });
-    }
-
-    private void showProgressSpinner() {
+    @Override
+    public void showProgressSpinner() {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
@@ -274,7 +243,8 @@ public class MainActivity extends SherlockFragmentActivity
         });
     }
 
-    private void hideProgressSpinner() {
+    @Override
+    public void hideProgressSpinner() {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
@@ -283,79 +253,4 @@ public class MainActivity extends SherlockFragmentActivity
         });
     }
 
-    private void setServerBrowserFragment(final ServerBrowserFragment sbf, final boolean addToStack) {
-        if (addToStack)
-            mFolderStack.push(mServerBrowserFragment.getFolder());
-
-        mServerBrowserFragment = sbf;
-        mServerBrowserTab.setTabListener(new TabActionListener(mServerBrowserFragment));
-
-        if (getSupportActionBar().getSelectedTab().equals(mServerBrowserTab))
-            showFragment(mServerBrowserFragment);
-    }
-
-    @Override
-    public void popServerBrowserFragment() {
-        showFolderContents(mFolderStack.pop(), false);
-    }
-
-    static final int FILESYSTEM_ENTRY_LOADER = 1, FOLDER_CONTENTS_LOADER = 2, TOP_LEVEL_FOLDERS_LOADER = 3;
-
-    @Override
-    public Uri getFilesystemEntryUri(final int id) {
-        return Uri.withAppendedPath(SubsonicProvider.Queries.FILESYSTEM_ENTRY.uri, Integer.toString(id));
-    }
-
-    @Override
-    public String[] getAllColumns() {
-        return SubsonicDatabaseHelper.getColumnNames();
-    }
-
-    @Override
-    public SubsonicLoaders.FolderContentsCursorLoader getFolderContentsCursorLoader(final int folderId) {
-        return new SubsonicLoaders.FolderContentsCursorLoader(this, mServerUrl, mUsername, mPassword, folderId);
-    }
-
-    @Override
-    public void showFolderContents(final Folder folder, final boolean addToStack) {
-        if (!serverConnected)
-            try {
-                connectToServer();
-            } catch (ServerNotSetUpException e) {
-                Log.e(logTag, "error", e);
-            }
-
-        showProgressSpinner();
-
-        final Uri queryUri = folder == null ?
-                SubsonicProvider.Queries.TOP_LEVEL_FOLDERS.uri :
-                Uri.withAppendedPath(SubsonicProvider.Queries.FOLDER_CONTENTS.uri, Integer.toString(folder.id));
-
-        final String[] columnNames = SubsonicDatabaseHelper.getColumnNames();
-
-        getSupportLoaderManager().initLoader(FOLDER_CONTENTS_LOADER, null, new LoaderManager.LoaderCallbacks<Cursor>() {
-            @Override
-            public Loader<Cursor> onCreateLoader(final int id, final Bundle data) {
-                //return new CursorLoader(MainActivity.this, queryUri, columnNames, null, null, null);
-                return new SubsonicLoaders.TopLevelFoldersCursorLoader(MainActivity.this, mServerUrl, mUsername,
-                        mPassword);
-            }
-
-            @Override
-            public void onLoadFinished(final Loader<Cursor> cursorLoader, final Cursor cursor) {
-                setServerBrowserFragment(new ServerBrowserFragment(cursor, folder), addToStack);
-            }
-
-            @Override
-            public void onLoaderReset(final Loader<Cursor> cursorLoader) {
-            }
-        });
-    }
-
-    @Override
-    public void refresh(final ServerBrowserFragment sbf) {
-        final Folder f = sbf.getFolder();
-        SubsonicCaller.getDatabaseHelper().delete(f);
-        showFolderContents(f, false);
-    }
 }

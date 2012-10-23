@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+
 <!--
   ~ Copyright (c) 2012, Joseph Casamento
   ~ All rights reserved.
@@ -32,9 +33,5 @@
     <item android:id="@+id/download_transcoded_file"
           android:icon="@drawable/ic_action_rocket"
           android:title="@string/download_transcoded_file"/>
-
-    <item android:id="@+id/stream_file"
-          android:icon="@drawable/ic_action_cloud"
-          android:title="@string/stream_file"/>
 
 </menu>

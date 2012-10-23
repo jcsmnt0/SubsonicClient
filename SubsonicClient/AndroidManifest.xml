@@ -56,10 +56,11 @@
 		</activity>
 
         <service android:name=".DownloadService" />
+        <service android:name=".SubsonicService" />
 
-        <provider android:authorities="com.casamento.subsonicclient.SubsonicProvider"
+        <provider android:authorities="com.casamento.subsonicclient.FilesystemEntryProvider"
                   android:multiprocess="true"
-                  android:name=".SubsonicProvider" />
+                  android:name=".FilesystemEntryProvider" />
 
 	</application>
 

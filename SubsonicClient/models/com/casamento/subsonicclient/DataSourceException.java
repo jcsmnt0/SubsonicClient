@@ -24,10 +24,10 @@
 
 package com.casamento.subsonicclient;
 
-class SubsonicException extends Exception {
+class DataSourceException extends Exception {
     final int code;
 
-    SubsonicException(final Integer code, final String message) {
+    DataSourceException(final Integer code, final String message) {
         super(message);
         this.code = code;
     }

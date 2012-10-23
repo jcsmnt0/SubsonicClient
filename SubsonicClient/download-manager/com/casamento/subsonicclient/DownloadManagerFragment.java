@@ -35,7 +35,6 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import com.actionbarsherlock.app.ActionBar;
 import com.actionbarsherlock.app.SherlockListFragment;
-import com.casamento.subsonicclient.DownloadService.Download;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -58,29 +57,30 @@ public class DownloadManagerFragment extends SherlockListFragment {
         super.onCreate(savedInstanceState);
     }
 
+    // Callbacks for DownloadService operations
     private final DownloadService.Listener mDownloadListener = new DownloadService.Adapter() {
         @Override
-        public void onAddition(final Download d) {
+        public void onAddition(final DownloadService.Download d) {
             mAdapter.add(d);
         }
 
         @Override
-        public void onStart(final Download d) {
+        public void onStart(final DownloadService.Download d) {
             mAdapter.notifyDataSetChanged();
         }
 
         @Override
-        public void onProgressUpdate(final Download d) {
+        public void onProgressUpdate(final DownloadService.Download d) {
             mAdapter.notifyDataSetChanged();
         }
 
         @Override
-        public void onCompletion(final Download d) {
+        public void onCompletion(final DownloadService.Download d) {
             mAdapter.remove(d);
         }
 
         @Override
-        public void onCancellation(final Download d) {
+        public void onCancellation(final DownloadService.Download d) {
             mAdapter.remove(d);
         }
     };
@@ -138,23 +138,20 @@ public class DownloadManagerFragment extends SherlockListFragment {
         super.onSaveInstanceState(outState);
     }
 
-    private class Adapter extends ArrayAdapter<Download> {
-        private final String logTag = "DownloadArrayAdapter";
-
+    private class Adapter extends ArrayAdapter<DownloadService.Download> {
         private class ViewHolder {
             private TextView name, path, progressView;
             private ProgressBar spinner;
         }
 
         private Adapter(final Context context) {
-            //super(context, R.layout.download_row_layout);
-            super(context, R.layout.download_row_layout, new ArrayList<Download>());
+            super(context, R.layout.download_row_layout, new ArrayList<DownloadService.Download>());
         }
 
         // addAll doesn't exist in Android pre-3.0
         @Override
-        public void addAll(final Collection<? extends Download> collection) {
-            for (final Download d : collection) {
+        public void addAll(final Collection<? extends DownloadService.Download> collection) {
+            for (final DownloadService.Download d : collection) {
                 add(d);
             }
         }
@@ -181,13 +178,11 @@ public class DownloadManagerFragment extends SherlockListFragment {
                 v = convertView;
             }
 
-            final Download d = getItem(position);
+            final DownloadService.Download d = getItem(position);
 
-            // I'm coming to realize that you can never count on anything's existence in Android, even if you
-            // explicitly created it like ten seconds ago
-            // TODO: figure out what the root problem is here and fix it
+            // TODO: figure out the problem is here and fix it - these shouldn't ever be null, but they sometimes are
             if (holder.name != null)
-                holder.name.setText(d.getMediaFile().name);
+                holder.name.setText(d.getName());
 
             if (holder.path != null)
                 holder.path.setText(d.getSavePath());

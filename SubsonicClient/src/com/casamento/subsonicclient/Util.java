@@ -27,16 +27,31 @@ package com.casamento.subsonicclient;
 import android.text.Html;
 import android.text.TextUtils;
 import android.util.Log;
+import org.apache.http.HttpResponse;
+import org.apache.http.auth.AuthenticationException;
+import org.apache.http.auth.Credentials;
+import org.apache.http.auth.UsernamePasswordCredentials;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpUriRequest;
+import org.apache.http.impl.auth.BasicScheme;
+import org.apache.http.impl.client.DefaultHttpClient;
 
+import java.io.BufferedInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.Map;
 
-// convenience methods
+// Methods that haven't yet found a home elsewhere, and are needed in disparate places
 public final class Util {
-    public static Calendar getDateFromString(final String dateStr) {
+    public static Calendar getDateFromISOString(final String dateStr) {
         if (TextUtils.isEmpty(dateStr))
             return null;
 
@@ -47,20 +62,89 @@ public final class Util {
             d = formatter.parse(dateStr);
         } catch (ParseException e) { // this shouldn't ever happen
             e.printStackTrace();
-            Log.wtf("Subsonic date problem", e.getLocalizedMessage());
+            Log.wtf("Date format problem", e.getLocalizedMessage(), e);
         }
         c.setTime(d);
         return c;
     }
 
-    public static String getStringFromDate(final Calendar date) {
+    public static String getISOStringFromDate(final Calendar date) {
         if (date == null) return "";
         final DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'hh:mm:ss");
         return formatter.format(date.getTime());
     }
 
-    public static String fixHTML(final String toFix) {
+    public static String fixHtmlEntities(final String toFix) {
         if (toFix == null) return null;
         return Html.fromHtml(toFix).toString();
+    }
+
+    // Builds a URL to perform a call to a REST service.
+    // Output form is url/method/key1=value1&key2=value2&... where key<n>/value<n> are the entries in the params Map
+    public static String buildRestCall(final String url, final String method, final Map<String, String> params) {
+        String urlStr = "";
+
+        // Assume http if no protocol given
+        if (!url.contains("://"))
+            urlStr += "http://";
+
+        urlStr += url;
+
+        if (method != null)
+            urlStr += ("/" + method);
+        if (params != null && !params.isEmpty()) {
+            String paramStr = "";
+            for (final Map.Entry<String, String> param : params.entrySet()) {
+                try {
+                    final String key = URLEncoder.encode(param.getKey(), "UTF-8");
+                    final String value = URLEncoder.encode(param.getValue(), "UTF-8");
+
+                    paramStr += (key + "=" + value + "&");
+                } catch (final UnsupportedEncodingException e) {
+                    // Android always supports UTF-8, so this is never thrown
+                    Log.wtf("UTF-8 is somehow not available", e);
+                }
+            }
+
+            // Trim trailing '&' char, for cleanliness
+            paramStr = paramStr.substring(0, paramStr.length()-1);
+
+            urlStr += ("?" + paramStr);
+        }
+
+        return urlStr;
+    }
+
+    private static final int BUFFER_SIZE = 1024;
+
+    // Reads all bytes from an InputStream into a String
+    static String readAll(final InputStream input) throws IOException {
+        String responseData = "";
+        int bytesRead = 1;
+        final byte[] buffer = new byte[BUFFER_SIZE];
+
+        while (bytesRead > 0) {
+            bytesRead = input.read(buffer);
+            if (bytesRead > 0)
+                responseData += new String(buffer, 0, bytesRead);
+        }
+
+        return responseData;
+    }
+
+    // Returns an InputStream wrapping a file on a network using basic preemptive HTTP authentication
+    static InputStream getStream(final String restUrl, final String username, final String password) throws AuthenticationException, IOException {
+        final HttpClient client = new DefaultHttpClient();
+        final HttpUriRequest get = new HttpGet(restUrl);
+
+        if (username != null && password != null) {
+            final Credentials creds = new UsernamePasswordCredentials(username, password);
+            get.addHeader(new BasicScheme().authenticate(creds, get));
+        }
+
+        // Make the request
+        final HttpResponse response = client.execute(get);
+
+        return new BufferedInputStream(response.getEntity().getContent());
     }
 }

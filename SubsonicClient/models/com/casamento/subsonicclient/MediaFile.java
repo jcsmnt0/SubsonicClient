@@ -26,92 +26,121 @@ package com.casamento.subsonicclient;
 
 import android.content.ContentValues;
 import android.database.Cursor;
-import org.json.JSONException;
-import org.json.JSONObject;
+import android.os.Parcel;
 
 import java.util.Calendar;
 
-import static com.casamento.subsonicclient.SubsonicCaller.DatabaseHelper.*;
-
-class MediaFile extends FilesystemEntry {
-    final String contentType, suffix, transcodedSuffix, transcodedContentType, path, album, artist, type;
-    final int duration, bitRate, albumId, artistId, year, trackNumber;
-    final long size;
-    final boolean isVideo;
+final class MediaFile extends FilesystemEntry {
+    final String suffix, transcodedSuffix, path, album, artist;
+    final Integer duration, trackNumber, coverArtId;
+    final Long size;
     final Calendar created;
 
-    MediaFile(final JSONObject jFile) throws JSONException {
-        path = jFile.getString("path");
-        suffix = Util.fixHTML(jFile.getString("suffix"));
+    MediaFile(final Integer id, final Integer parentId, final String name, final Integer coverArtId,
+            final String path, final String suffix, final String transcodedSuffix, final String artist,
+            final String album, final Long size, final Integer duration, final Integer trackNumber,
+            final Calendar created) {
+        super(id, parentId, false, name);
 
-        contentType           = Util.fixHTML(jFile.optString("contentType", null));
-        transcodedSuffix      = Util.fixHTML(jFile.optString("transcodedSuffix", null));
-        transcodedContentType = Util.fixHTML(jFile.optString("transcodedContentType", null));
-        album                 = Util.fixHTML(jFile.optString("album", null));
-        artist                = Util.fixHTML(jFile.optString("artist", null));
-        type                  = Util.fixHTML(jFile.optString("type", null));
-
-        size = jFile.optLong("size", -1);
-
-        isVideo = jFile.optBoolean("isVideo", false);
-
-        duration	= jFile.optInt("duration", -1);
-        bitRate	    = jFile.optInt("bitRate", -1);
-        albumId	    = jFile.optInt("albumId", -1);
-        artistId	= jFile.optInt("artistId", -1);
-        year		= jFile.optInt("year", -1);
-        trackNumber = jFile.optInt("track", -1);
-
-        created = Util.getDateFromString(jFile.optString("created", null));
+        this.coverArtId = coverArtId;
+        this.path = path;
+        this.suffix = suffix;
+        this.transcodedSuffix = transcodedSuffix;
+        this.artist = artist;
+        this.album = album;
+        this.size = size;
+        this.duration = duration;
+        this.trackNumber = trackNumber;
+        this.created = created;
     }
 
     MediaFile(final Cursor c) {
-        path = c.getString(c.getColumnIndex(PATH.name));
-        suffix = c.getString(c.getColumnIndex(SUFFIX.name));
+        super(c);
+        path = c.getString(c.getColumnIndex(DatabaseHelper.PATH.name));
+        suffix = c.getString(c.getColumnIndex(DatabaseHelper.SUFFIX.name));
 
-        contentType = c.getString(c.getColumnIndex(CONTENT_TYPE.name));
-        transcodedContentType = c.getString(c.getColumnIndex(TRANSCODED_CONTENT_TYPE.name));
-        transcodedSuffix = c.getString(c.getColumnIndex(TRANSCODED_SUFFIX.name));
-        album = c.getString(c.getColumnIndex(ALBUM.name));
-        artist = c.getString(c.getColumnIndex(ARTIST.name));
-        type = c.getString(c.getColumnIndex(TYPE.name));
+        transcodedSuffix = c.getString(c.getColumnIndex(DatabaseHelper.TRANSCODED_SUFFIX.name));
+        album = c.getString(c.getColumnIndex(DatabaseHelper.ALBUM.name));
+        artist = c.getString(c.getColumnIndex(DatabaseHelper.ARTIST.name));
 
-        size = c.getLong(c.getColumnIndex(SIZE.name));
+        size = c.getLong(c.getColumnIndex(DatabaseHelper.SIZE.name));
 
-        isVideo = c.getInt(c.getColumnIndex(IS_VIDEO.name)) == 1;
+        duration = c.getInt(c.getColumnIndex(DatabaseHelper.DURATION.name));
+        trackNumber = c.getInt(c.getColumnIndex(DatabaseHelper.TRACK_NUMBER.name));
+        coverArtId = c.getInt(c.getColumnIndex(DatabaseHelper.COVER_ART_ID.name));
 
-        duration = c.getInt(c.getColumnIndex(DURATION.name));
-        bitRate = c.getInt(c.getColumnIndex(BIT_RATE.name));
-        albumId = c.getInt(c.getColumnIndex(ALBUM_ID.name));
-        artistId = c.getInt(c.getColumnIndex(ARTIST_ID.name));
-        year = c.getInt(c.getColumnIndex(YEAR.name));
-        trackNumber = c.getInt(c.getColumnIndex(TRACK_NUMBER.name));
-
-        created = Util.getDateFromString(c.getString(c.getColumnIndex(CREATED.name)));
+        created = Util.getDateFromISOString(c.getString(c.getColumnIndex(DatabaseHelper.CREATED.name)));
     }
 
     ContentValues getContentValues() {
         final ContentValues cv = new ContentValues();
         cv.putAll(super.getContentValues());
 
-        cv.put(PATH.name, path);
-        cv.put(SUFFIX.name, suffix);
-        cv.put(TRACK_NUMBER.name, trackNumber);
-        cv.put(CONTENT_TYPE.name, contentType);
-        cv.put(TRANSCODED_CONTENT_TYPE.name, transcodedContentType);
-        cv.put(TRANSCODED_SUFFIX.name, transcodedSuffix);
-        cv.put(ARTIST.name, artist);
-        cv.put(ALBUM.name, album);
-        cv.put(TYPE.name, type);
-        cv.put(SIZE.name, size);
-        cv.put(IS_VIDEO.name, isVideo);
-        cv.put(DURATION.name, duration);
-        cv.put(BIT_RATE.name, bitRate);
-        cv.put(ALBUM_ID.name, albumId);
-        cv.put(ARTIST_ID.name, artistId);
-        cv.put(YEAR.name, year);
-        cv.put(CREATED.name, Util.getStringFromDate(created));
+        cv.put(DatabaseHelper.PATH.name, path);
+        cv.put(DatabaseHelper.SUFFIX.name, suffix);
+        cv.put(DatabaseHelper.TRACK_NUMBER.name, trackNumber);
+        cv.put(DatabaseHelper.TRANSCODED_SUFFIX.name, transcodedSuffix);
+        cv.put(DatabaseHelper.ARTIST.name, artist);
+        cv.put(DatabaseHelper.ALBUM.name, album);
+        cv.put(DatabaseHelper.SIZE.name, size);
+        cv.put(DatabaseHelper.DURATION.name, duration);
+        cv.put(DatabaseHelper.COVER_ART_ID.name, coverArtId);
+        cv.put(DatabaseHelper.CREATED.name, Util.getISOStringFromDate(created));
 
         return cv;
+    }
+
+    @Override
+    public void writeToParcel(final Parcel out, final int flags) {
+        super.writeToParcel(out, flags);
+        writeParcelPart(out);
+    }
+
+    void writeParcelPart(final Parcel out) {
+        out.writeValue(coverArtId);
+
+        out.writeString(path);
+        out.writeString(suffix);
+        out.writeString(transcodedSuffix);
+        out.writeString(artist);
+        out.writeString(album);
+
+        out.writeValue(size);
+
+        out.writeValue(duration);
+        out.writeValue(trackNumber);
+
+        out.writeString(Util.getISOStringFromDate(created));
+    }
+
+    public static final Creator<MediaFile> CREATOR = new Creator<MediaFile>() {
+        @Override
+        public MediaFile createFromParcel(final Parcel in) {
+            return (MediaFile) getInstance(in);
+        }
+
+        @Override
+        public MediaFile[] newArray(final int size) {
+            return new MediaFile[size];
+        }
+    };
+
+    MediaFile(final Integer id, final Integer parentId, final String name, final Parcel in) {
+        // TODO: this is really ugly and redundant
+        this(
+                id,
+                parentId,
+                name,
+                (Integer) in.readValue(ClassLoader.getSystemClassLoader()),
+                in.readString(),
+                in.readString(),
+                in.readString(),
+                in.readString(),
+                in.readString(),
+                (Long) in.readValue(ClassLoader.getSystemClassLoader()),
+                (Integer) in.readValue(ClassLoader.getSystemClassLoader()),
+                (Integer) in.readValue(ClassLoader.getSystemClassLoader()),
+                Util.getDateFromISOString(in.readString())
+        );
     }
 }
