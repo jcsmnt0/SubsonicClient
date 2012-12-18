@@ -26,7 +26,7 @@
 <preference-headers
     xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <header android:fragment="com.casamento.subsonicclient.PreferenceActivity"
+    <header android:fragment="com.casamento.subsonicclient.PreferencesActivity"
         android:icon="@drawable/ic_action_database"
         android:title="@string/server_pref_title">
         <extra android:name="pref-resource"

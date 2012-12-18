@@ -24,25 +24,21 @@
 
 package com.casamento.subsonicclient;
 
-import android.content.ComponentName;
-import android.content.Context;
-import android.content.Intent;
-import android.content.ServiceConnection;
+import android.app.ActionBar;
+import android.app.Activity;
+import android.app.Fragment;
+import android.app.FragmentTransaction;
+import android.content.*;
 import android.database.Cursor;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.IBinder;
-import android.support.v4.app.Fragment;
-import android.support.v4.app.FragmentTransaction;
-import android.support.v4.content.Loader;
 import android.util.Log;
-import com.actionbarsherlock.app.ActionBar;
-import com.actionbarsherlock.app.SherlockFragmentActivity;
-import com.actionbarsherlock.view.Menu;
-import com.actionbarsherlock.view.MenuItem;
-import com.actionbarsherlock.view.Window;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.Window;
 
-public class MainActivity extends SherlockFragmentActivity
+public class MainActivity extends Activity
         implements ServerBrowserFragment.ActivityCallback, DownloadManagerFragment.ActivityCallback {
     private DataSource mDataSource;
 
@@ -62,7 +58,7 @@ public class MainActivity extends SherlockFragmentActivity
 
         // Make the progress spinner on the right side of the action bar available
         requestWindowFeature(Window.FEATURE_INDETERMINATE_PROGRESS);
-        setSupportProgressBarIndeterminateVisibility(false);
+        setProgressBarIndeterminateVisibility(false);
 
         // Set up the test data source (TODO: remove once the preference screen works)
         mDataSource = new DataSource(this, "test", mSubInfo, SubsonicService.class);
@@ -70,7 +66,7 @@ public class MainActivity extends SherlockFragmentActivity
         setContentView(R.layout.main);
 
         // Get an action bar with tabs
-        final ActionBar actionBar = getSupportActionBar();
+        final ActionBar actionBar = getActionBar();
         actionBar.setNavigationMode(ActionBar.NAVIGATION_MODE_TABS);
 
         // Set up the server browser fragment and its associated tab
@@ -217,7 +213,7 @@ public class MainActivity extends SherlockFragmentActivity
 
     @Override
     public boolean onCreateOptionsMenu(final Menu menu) {
-        getSupportMenuInflater().inflate(R.menu.optionsmenu_main, menu);
+        getMenuInflater().inflate(R.menu.optionsmenu_main, menu);
         return true;
     }
 
@@ -225,7 +221,7 @@ public class MainActivity extends SherlockFragmentActivity
     public boolean onOptionsItemSelected(final MenuItem item) {
         switch (item.getItemId()) {
             case R.id.option_preferences:
-                startActivity(new Intent(getBaseContext(), PreferenceActivity.class));
+                startActivity(new Intent(getBaseContext(), PreferencesActivity.class));
                 return true;
 
             default:
@@ -238,7 +234,7 @@ public class MainActivity extends SherlockFragmentActivity
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                setSupportProgressBarIndeterminateVisibility(true);
+                setProgressBarIndeterminateVisibility(true);
             }
         });
     }
@@ -248,7 +244,7 @@ public class MainActivity extends SherlockFragmentActivity
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                setSupportProgressBarIndeterminateVisibility(false);
+                setProgressBarIndeterminateVisibility(false);
             }
         });
     }

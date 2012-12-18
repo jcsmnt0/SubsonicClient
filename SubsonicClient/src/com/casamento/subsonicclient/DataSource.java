@@ -24,17 +24,12 @@
 
 package com.casamento.subsonicclient;
 
-import android.content.ContentResolver;
-import android.content.Context;
-import android.content.Intent;
-import android.content.UriMatcher;
+import android.content.*;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.os.ResultReceiver;
-import android.support.v4.content.AsyncTaskLoader;
-import android.support.v4.content.Loader;
 
 import static com.casamento.subsonicclient.DataRetrievalService.*;
 

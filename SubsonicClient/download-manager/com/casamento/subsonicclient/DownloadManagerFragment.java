@@ -24,7 +24,9 @@
 
 package com.casamento.subsonicclient;
 
+import android.app.ActionBar;
 import android.app.Activity;
+import android.app.ListFragment;
 import android.content.Context;
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -33,8 +35,6 @@ import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-import com.actionbarsherlock.app.ActionBar;
-import com.actionbarsherlock.app.SherlockListFragment;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -42,7 +42,7 @@ import java.util.Collection;
 import static android.view.View.INVISIBLE;
 import static android.view.View.VISIBLE;
 
-public class DownloadManagerFragment extends SherlockListFragment {
+public class DownloadManagerFragment extends ListFragment {
     private static final String logTag = "DownloadManagerFragment";
     private Adapter mAdapter;
     private ActivityCallback mActivity;
@@ -50,7 +50,7 @@ public class DownloadManagerFragment extends SherlockListFragment {
 
     interface ActivityCallback {
         DownloadService getDownloadService();
-        ActionBar getSupportActionBar();
+        ActionBar getActionBar();
     }
 
     public void onCreate(final Bundle savedInstanceState) {
@@ -109,7 +109,7 @@ public class DownloadManagerFragment extends SherlockListFragment {
         mAdapter.clear();
         mAdapter.addAll(mDownloadService.getPendingDownloads());
 
-        final ActionBar ab = mActivity.getSupportActionBar();
+        final ActionBar ab = mActivity.getActionBar();
 
         ab.setHomeButtonEnabled(false);
         ab.setDisplayHomeAsUpEnabled(false);
@@ -163,7 +163,7 @@ public class DownloadManagerFragment extends SherlockListFragment {
 
             if (convertView == null) {
                 final LayoutInflater li = (LayoutInflater)
-                        getSherlockActivity().getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+                        getActivity().getSystemService(Context.LAYOUT_INFLATER_SERVICE);
                 v = li.inflate(R.layout.download_row_layout, parent, false);
 
                 holder = new ViewHolder();

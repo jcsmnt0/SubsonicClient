@@ -24,33 +24,27 @@
 
 package com.casamento.subsonicclient;
 
+import android.app.ActionBar;
 import android.app.Activity;
+import android.app.ListFragment;
+import android.app.LoaderManager;
 import android.content.Context;
+import android.content.Loader;
 import android.database.Cursor;
 import android.os.Bundle;
-import android.support.v4.app.LoaderManager.LoaderCallbacks;
-import android.support.v4.content.Loader;
-import android.support.v4.widget.CursorAdapter;
 import android.util.Log;
-import android.view.ContextMenu;
+import android.view.*;
 import android.view.ContextMenu.ContextMenuInfo;
-import android.view.LayoutInflater;
-import android.view.View;
-import android.view.ViewGroup;
 import android.widget.*;
 import android.widget.AdapterView.AdapterContextMenuInfo;
 import android.widget.AdapterView.OnItemClickListener;
-import com.actionbarsherlock.app.ActionBar;
-import com.actionbarsherlock.app.SherlockListFragment;
-import com.actionbarsherlock.view.Menu;
-import com.actionbarsherlock.view.MenuItem;
 
 import java.util.Stack;
 
 import static com.casamento.subsonicclient.MainActivity.FOLDER_CONTENTS_LOADER;
 import static com.casamento.subsonicclient.MainActivity.TOP_LEVEL_FOLDERS_LOADER;
 
-public class ServerBrowserFragment extends SherlockListFragment {
+public class ServerBrowserFragment extends ListFragment {
     private final Stack<Cursor> mCursorStack = new Stack<Cursor>();
     private final Stack<Folder> mFolderStack = new Stack<Folder>();
     private CursorAdapter mAdapter;
@@ -59,7 +53,7 @@ public class ServerBrowserFragment extends SherlockListFragment {
 
     // containing Activity must implement this interface; enforced in onAttach
     interface ActivityCallback {
-        ActionBar getSupportActionBar();
+        ActionBar getActionBar();
         void download(FilesystemEntry entry, boolean transcoded);
         void showProgressSpinner();
         void hideProgressSpinner();
@@ -109,7 +103,7 @@ public class ServerBrowserFragment extends SherlockListFragment {
         setListAdapter(mAdapter);
 
         // Load and show the top level folders from the server
-        getLoaderManager().restartLoader(TOP_LEVEL_FOLDERS_LOADER, null, new LoaderCallbacks<Cursor>() {
+        getLoaderManager().restartLoader(TOP_LEVEL_FOLDERS_LOADER, null, new LoaderManager.LoaderCallbacks<Cursor>() {
             @Override
             public Loader<Cursor> onCreateLoader(final int id, final Bundle data) {
                 // Start the loading
@@ -120,7 +114,7 @@ public class ServerBrowserFragment extends SherlockListFragment {
             @Override
             public void onLoadFinished(final Loader<Cursor> cursorLoader, final Cursor cursor) {
                 // Display the loaded data
-                mAdapter = new FilesystemEntryCursorAdapter(getSherlockActivity(), cursor, false);
+                mAdapter = new FilesystemEntryCursorAdapter(getActivity(), cursor, false);
                 setListAdapter(mAdapter);
 
                 mFolderStack.push(Folder.ROOT_FOLDER);
@@ -147,7 +141,7 @@ public class ServerBrowserFragment extends SherlockListFragment {
         mActivity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                final ActionBar ab = mActivity.getSupportActionBar();
+                final ActionBar ab = mActivity.getActionBar();
 
                 final boolean enabled = (mFolderStack.size() > 1);
                 ab.setHomeButtonEnabled(enabled);
@@ -173,7 +167,7 @@ public class ServerBrowserFragment extends SherlockListFragment {
      *                   from the database cache if possible
      */
     private void loadAndShowFolderContents(final Folder folder, final boolean keepOldCursor, final boolean reloadData) {
-        getLoaderManager().restartLoader(FOLDER_CONTENTS_LOADER, null, new LoaderCallbacks<Cursor>() {
+        getLoaderManager().restartLoader(FOLDER_CONTENTS_LOADER, null, new LoaderManager.LoaderCallbacks<Cursor>() {
             @Override
             public Loader<Cursor> onCreateLoader(final int id, final Bundle data) {
                 mActivity.showProgressSpinner();
@@ -224,7 +218,7 @@ public class ServerBrowserFragment extends SherlockListFragment {
         menu.setHeaderTitle(entry.name);
 
         final int menuRes = entry.isFolder ? R.menu.contextmenu_folder : R.menu.contextmenu_file;
-        getSherlockActivity().getMenuInflater().inflate(menuRes, menu);
+        getActivity().getMenuInflater().inflate(menuRes, menu);
     }
 
     @Override
@@ -278,7 +272,7 @@ public class ServerBrowserFragment extends SherlockListFragment {
         // For some reason, this adds menu items every time it's called; so check to see if this Fragment's items
         // already exist before adding them
         if (menu.findItem(R.id.refresh) == null)
-            getSherlockActivity().getSupportMenuInflater().inflate(R.menu.optionsmenu_server_browser, menu);
+            getActivity().getMenuInflater().inflate(R.menu.optionsmenu_server_browser, menu);
     }
 
     @Override

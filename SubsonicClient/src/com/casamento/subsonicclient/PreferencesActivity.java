@@ -30,13 +30,13 @@ import android.os.Bundle;
 import android.preference.EditTextPreference;
 import android.preference.Preference;
 import android.preference.Preference.OnPreferenceClickListener;
+import android.preference.PreferenceActivity;
 import android.text.InputType;
-import com.actionbarsherlock.app.SherlockPreferenceActivity;
 
 import java.util.Arrays;
 
-public class PreferenceActivity extends SherlockPreferenceActivity implements OnSharedPreferenceChangeListener {
-    final PreferenceActivity self = this;
+public class PreferencesActivity extends PreferenceActivity implements OnSharedPreferenceChangeListener {
+    final PreferencesActivity self = this;
 
     @SuppressWarnings("deprecation")
     @Override

@@ -60,7 +60,6 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:id="@+id/listrow_download_progress_bar"
-            style="@style/Widget.Sherlock.ProgressBar"
             android:indeterminate="true"
             android:visibility="invisible"
             android:layout_alignParentRight="true"/>

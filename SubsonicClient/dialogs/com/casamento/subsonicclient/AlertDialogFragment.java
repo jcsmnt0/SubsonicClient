@@ -24,15 +24,15 @@
 
 package com.casamento.subsonicclient;
 
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
+import android.app.DialogFragment;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.os.Bundle;
-import com.actionbarsherlock.app.SherlockDialogFragment;
-import com.actionbarsherlock.app.SherlockFragmentActivity;
 
-class AlertDialogFragment extends SherlockDialogFragment {
+class AlertDialogFragment extends DialogFragment {
     private final String title, message, positiveString, negativeString, neutralString;
     private final DialogInterface.OnClickListener onClickListener;
 
@@ -66,8 +66,8 @@ class AlertDialogFragment extends SherlockDialogFragment {
                 .setNeutralButton(R.string.ok));
     }
 
-    void show(final SherlockFragmentActivity fragmentActivity) {
-        show(fragmentActivity.getSupportFragmentManager(), "dialog");
+    void show(final Activity fragmentActivity) {
+        show(fragmentActivity.getFragmentManager(), "dialog");
     }
 
     protected static class Builder {
@@ -145,7 +145,7 @@ class AlertDialogFragment extends SherlockDialogFragment {
 
     @Override
     public Dialog onCreateDialog(final Bundle savedInstanceState) {
-        final AlertDialog.Builder b = new AlertDialog.Builder(getSherlockActivity());
+        final AlertDialog.Builder b = new AlertDialog.Builder(getActivity());
 
         // string resources take precedence over string literals, because why not
         if (title != null)
