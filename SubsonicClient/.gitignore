@@ -43,11 +43,3 @@ local.properties
 # Eclipse project files
 .classpath
 .project
-
-proguard-project.txt
-
-# IntelliJ IDEA
-*.iml
-*.ipr
-*.iws
-.idea/
